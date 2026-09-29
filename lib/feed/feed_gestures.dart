@@ -1,70 +1,139 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
 
-/// Wraps a child widget and handles feed gestures such as vertical swipes,
-/// tap for play/pause, and double tap for favorite.
-class FeedGestureHandler extends StatelessWidget {
+class FeedGestureHandler extends StatefulWidget {
+  final Widget child;
+  final VoidCallback onNext;
+  final VoidCallback onPrevious;
+  final VoidCallback onTogglePlayPause;
+  final VoidCallback onToggleFavorite;
+  final VoidCallback onSeekForward;
+  final VoidCallback onSeekBackward;
+  final VoidCallback onSeekForwardLarge;
+  final VoidCallback onSeekBackwardLarge;
+  final VoidCallback onHideVideo;
+  final VoidCallback onHideFolder;
+  final VoidCallback onReshuffle;
+  final VoidCallback onToggleInfo;
+  
   const FeedGestureHandler({
     super.key,
     required this.child,
-    this.onSwipeUp,
-    this.onSwipeDown,
-    this.onTap,
-    this.onDoubleTap,
-    this.onPlayPause,
-    this.onFavorite,
+    required this.onNext,
+    required this.onPrevious,
+    required this.onTogglePlayPause,
+    required this.onToggleFavorite,
+    required this.onSeekForward,
+    required this.onSeekBackward,
+    required this.onSeekForwardLarge,
+    required this.onSeekBackwardLarge,
+    required this.onHideVideo,
+    required this.onHideFolder,
+    required this.onReshuffle,
+    required this.onToggleInfo,
   });
 
-  /// The widget below this widget in the tree.
-  final Widget child;
+  @override
+  State<FeedGestureHandler> createState() => _FeedGestureHandlerState();
+}
 
-  /// Callback triggered when a vertical upward swipe is detected.
-  final VoidCallback? onSwipeUp;
+class _FeedGestureHandlerState extends State<FeedGestureHandler> {
+  final FocusNode _focusNode = FocusNode();
+  DateTime _lastScrollTime = DateTime.now();
 
-  /// Callback triggered when a vertical downward swipe is detected.
-  final VoidCallback? onSwipeDown;
-
-  /// Callback triggered on a single tap.
-  final VoidCallback? onTap;
-
-  /// Callback triggered on a double tap.
-  final VoidCallback? onDoubleTap;
-
-  /// Optional alias callback triggered on single tap (play/pause).
-  final VoidCallback? onPlayPause;
-
-  /// Optional alias callback triggered on double tap (favorite).
-  final VoidCallback? onFavorite;
-
-  void _handleTap() {
-    onTap?.call();
-    onPlayPause?.call();
+  @override
+  void dispose() {
+    _focusNode.dispose();
+    super.dispose();
   }
 
-  void _handleDoubleTap() {
-    onDoubleTap?.call();
-    onFavorite?.call();
-  }
-
-  void _handleVerticalDragEnd(DragEndDetails details) {
-    final velocity = details.primaryVelocity ?? details.velocity.pixelsPerSecond.dy;
-    if (velocity < 0) {
-      onSwipeUp?.call();
-    } else if (velocity > 0) {
-      onSwipeDown?.call();
+  void _handleScroll(PointerScrollEvent event) {
+    final now = DateTime.now();
+    if (now.difference(_lastScrollTime).inMilliseconds < 300) {
+      return; // cooldown
+    }
+    
+    if (event.scrollDelta.dy > 10) {
+      _lastScrollTime = now;
+      widget.onNext();
+    } else if (event.scrollDelta.dy < -10) {
+      _lastScrollTime = now;
+      widget.onPrevious();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final hasTap = onTap != null || onPlayPause != null;
-    final hasDoubleTap = onDoubleTap != null || onFavorite != null;
-
-    return GestureDetector(
-      behavior: HitTestBehavior.opaque,
-      onVerticalDragEnd: _handleVerticalDragEnd,
-      onTap: hasTap ? _handleTap : null,
-      onDoubleTap: hasDoubleTap ? _handleDoubleTap : null,
-      child: child,
+    return Focus(
+      focusNode: _focusNode,
+      autofocus: true,
+      onKeyEvent: (FocusNode node, KeyEvent event) {
+        if (event is KeyDownEvent) {
+          final isShift = HardwareKeyboard.instance.isShiftPressed;
+          
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown || 
+              event.logicalKey == LogicalKeyboardKey.keyJ) {
+            widget.onNext();
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp || 
+                     event.logicalKey == LogicalKeyboardKey.keyK) {
+            widget.onPrevious();
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.space) {
+            widget.onTogglePlayPause();
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowRight) {
+            if (isShift) {
+              widget.onSeekForwardLarge();
+            } else {
+              widget.onSeekForward();
+            }
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowLeft) {
+            if (isShift) {
+              widget.onSeekBackwardLarge();
+            } else {
+              widget.onSeekBackward();
+            }
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.keyF) {
+            widget.onToggleFavorite();
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.keyH) {
+            if (isShift) {
+              widget.onHideFolder();
+            } else {
+              widget.onHideVideo();
+            }
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.keyR) {
+            widget.onReshuffle();
+            return KeyEventResult.handled;
+          } else if (event.logicalKey == LogicalKeyboardKey.keyI) {
+            widget.onToggleInfo();
+            return KeyEventResult.handled;
+          }
+        }
+        return KeyEventResult.ignored;
+      },
+      child: Listener(
+        onPointerSignal: (pointerSignal) {
+          if (pointerSignal is PointerScrollEvent) {
+            _handleScroll(pointerSignal);
+          }
+        },
+        child: MouseRegion(
+          onHover: (_) {
+            // Desktop hover overlay triggering logic can be added here
+          },
+          child: GestureDetector(
+            onTap: widget.onTogglePlayPause,
+            onDoubleTap: widget.onToggleFavorite,
+            child: widget.child,
+          ),
+        ),
+      ),
     );
   }
 }

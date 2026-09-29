@@ -64,3 +64,58 @@ class Source {
     );
   }
 }
+
+/// Represents a specific media file within a source.
+class Media {
+  /// Unique identifier for the media item.
+  final int id;
+
+  /// Identifier of the source containing this media.
+  final int sourceId;
+
+  /// Path to the media file, relative to the source's root.
+  final String relativePath;
+
+  /// Name of the media file, including extension.
+  final String fileName;
+
+  /// Extension of the media file, without the leading dot.
+  final String extension;
+
+  /// Size of the media file in bytes.
+  final int size;
+
+  /// Timestamp of the media file's last modification.
+  final DateTime modifiedAt;
+
+  const Media({
+    required this.id,
+    required this.sourceId,
+    required this.relativePath,
+    required this.fileName,
+    required this.extension,
+    required this.size,
+    required this.modifiedAt,
+  });
+
+  /// Creates a copy of this [Media] with the given fields replaced by new values.
+  Media copyWith({
+    int? id,
+    int? sourceId,
+    String? relativePath,
+    String? fileName,
+    String? extension,
+    int? size,
+    DateTime? modifiedAt,
+  }) {
+    return Media(
+      id: id ?? this.id,
+      sourceId: sourceId ?? this.sourceId,
+      relativePath: relativePath ?? this.relativePath,
+      fileName: fileName ?? this.fileName,
+      extension: extension ?? this.extension,
+      size: size ?? this.size,
+      modifiedAt: modifiedAt ?? this.modifiedAt,
+    );
+  }
+}

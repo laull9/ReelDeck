@@ -14,6 +14,9 @@ abstract class PlayerService {
   /// Seeks to the specified [position].
   Future<void> seekTo(Duration position);
 
+  /// Sets the volume (0.0 to 1.0).
+  Future<void> setVolume(double volume);
+
   /// Releases resources associated with the player.
   Future<void> dispose();
 
@@ -25,4 +28,13 @@ abstract class PlayerService {
 
   /// Total duration of the current media.
   Duration get duration;
+
+  /// Path of currently opened media.
+  String? get currentPath;
+
+  /// Streams for reactive UI updates.
+  Stream<Duration> get positionStream;
+  Stream<bool> get playingStream;
+  Stream<Duration> get durationStream;
+  Stream<bool> get completedStream; // fires when video finishes
 }
