@@ -1,180 +1,249 @@
 import 'dart:io';
+import 'dart:math';
+
 import 'package:flutter/foundation.dart';
-import 'package:file_picker/file_picker.dart';
 import 'package:path/path.dart' as p;
 
+import '../database/library_store.dart';
 import 'source.dart';
 import 'scanner.dart';
 import 'source_resolver.dart';
 import 'platform/default_resolver.dart';
-import 'platform/macos_resolver.dart';
+import 'platform/storage_bridge.dart';
 
 class SourceManager extends ChangeNotifier {
   final SourceScanner _scanner;
   final SourceResolver _resolver;
-
+  final LibraryStore? store;
   final List<Source> _sources = [];
   final Map<int, List<Media>> _mediaBySource = {};
   bool _isScanning = false;
-
+  bool _disposed = false;
+  String? error;
+  int revision = 0;
   int _nextSourceId = 1;
   int _nextMediaId = 1;
+  bool recursive = true;
 
-  SourceManager({SourceScanner? scanner, SourceResolver? resolver})
-      : _scanner = scanner ?? SourceScanner(),
-        _resolver = resolver ?? _getResolverForPlatform();
+  SourceManager({SourceScanner? scanner, SourceResolver? resolver, this.store})
+    : _scanner = scanner ?? SourceScanner(),
+      _resolver = resolver ?? DefaultResolver();
 
-  static SourceResolver _getResolverForPlatform() {
-    if (Platform.isMacOS) {
-      return MacOSResolver();
-    }
-    return DefaultResolver();
-  }
-
-  // Getters
   List<Source> get sources => List.unmodifiable(_sources);
-
-  List<Media> get allMedia {
-    return _mediaBySource.values.expand((list) => list).toList();
-  }
-
+  List<Media> get allMedia =>
+      _mediaBySource.values.expand((list) => list).toList();
   bool get isScanning => _isScanning;
   bool get hasSources => _sources.isNotEmpty;
+  void _notify({bool changed = false}) {
+    if (changed) revision++;
+    if (!_disposed) notifyListeners();
+  }
 
-  // Actions
+  Future<void> initialize() async {
+    if (store == null) return;
+    _sources.addAll(await store!.sources());
+    for (final s in _sources) {
+      _nextSourceId = max(_nextSourceId, s.id + 1);
+      _mediaBySource[s.id] = [];
+    }
+    for (final m in await store!.media()) {
+      _nextMediaId = max(_nextMediaId, m.id + 1);
+      _mediaBySource[m.sourceId]?.add(m);
+    }
+    _notify(changed: true);
+  }
+
   void addSource(Source source) {
-    if (!_sources.any((s) => s.id == source.id)) {
+    if (_sources.any((s) => s.id == source.id)) return;
+    _sources.add(source);
+    _nextSourceId = max(_nextSourceId, source.id + 1);
+    _mediaBySource[source.id] = [];
+    _notify(changed: true);
+  }
+
+  Future<Source?> pickAndAddFolder({int? replaceId}) async {
+    if (_isScanning) return null;
+    try {
+      error = null;
+      final picked = await StorageBridge.pick();
+      if (picked == null) return null;
+      final locator = picked['locator'] as String;
+      final path = picked['path'] as String;
+      for (final s in _sources) {
+        if (s.id != replaceId &&
+            (s.locator == locator || s.lastKnownPath == path)) {
+          await scanSource(s);
+          return s;
+        }
+      }
+      final old = _sources.where((s) => s.id == replaceId).firstOrNull;
+      final source = Source(
+        id: old?.id ?? _nextSourceId++,
+        name: picked['name'] as String? ?? p.basename(path),
+        locator: locator,
+        lastKnownPath: path,
+        platform: Platform.operatingSystem,
+        enabled: old?.enabled ?? true,
+        recursive: old?.recursive ?? recursive,
+      );
+      await store?.saveSource(source);
+      if (old != null) _sources.remove(old);
       _sources.add(source);
-      _mediaBySource[source.id] = [];
-      notifyListeners();
+      _mediaBySource.putIfAbsent(source.id, () => []);
+      _notify(changed: true);
+      await scanSource(source);
+      return source;
+    } catch (e) {
+      error = '无法添加目录：$e';
+      _notify();
+      return null;
     }
   }
 
-  Future<Source?> pickAndAddFolder() async {
-    final path = await FilePicker.platform.getDirectoryPath();
-    if (path == null) {
-      return null;
-    }
-
-    final name = p.basename(path);
-    String platformStr = 'unknown';
-    if (Platform.isMacOS) {
-      platformStr = 'macos';
-    } else if (Platform.isWindows) {
-      platformStr = 'windows';
-    } else if (Platform.isAndroid) {
-      platformStr = 'android';
-    }
-
-    final source = Source(
-      id: _nextSourceId++,
-      name: name,
-      locator: path,
-      lastKnownPath: path,
-      platform: platformStr,
-      enabled: true,
-      recursive: true,
+  Future<Source?> _resolve(Source source) async {
+    if (source.platform == 'test') return source;
+    final result = await StorageBridge.resolve(source.locator);
+    if (result == null) return null;
+    final updated = source.copyWith(
+      lastKnownPath: result['path'] as String,
+      locator: result['locator'] as String? ?? source.locator,
     );
-
-    _sources.add(source);
-    _mediaBySource[source.id] = [];
-    notifyListeners();
-
-    await scanSource(source);
-
-    return source;
+    final index = _sources.indexWhere((s) => s.id == source.id);
+    if (index < 0) return null;
+    _sources[index] = updated;
+    await store?.saveSource(updated);
+    return updated;
   }
 
   Future<void> scanSource(Source source) async {
+    if (_isScanning) return;
     _isScanning = true;
-    notifyListeners();
-
+    error = null;
+    _notify();
     try {
-      final isAvailable = await _resolver.checkAvailability(source);
-      if (!isAvailable) {
-        return;
-      }
-
-      final relativePaths = await _scanner.scan(source.lastKnownPath, recursive: source.recursive);
-      final mediaList = <Media>[];
-
-      for (final relPath in relativePaths) {
-        final fullPath = p.join(source.lastKnownPath, relPath);
-        final file = File(fullPath);
-        
-        int size = 0;
-        DateTime modifiedAt = DateTime.now();
-        if (await file.exists()) {
-          final stat = await file.stat();
-          size = stat.size;
-          modifiedAt = stat.modified;
+      final resolved = await _resolve(source);
+      if (resolved == null) throw const FileSystemException('目录未连接或授权失效');
+      source = resolved;
+      final old = {
+        for (final m in _mediaBySource[source.id] ?? <Media>[])
+          m.relativePath: m,
+      };
+      final items = <Media>[];
+      if (Platform.isAndroid && source.platform != 'test') {
+        for (final row in await StorageBridge.scan(
+          source.locator,
+          source.recursive,
+        )) {
+          final rel = row['path'] as String;
+          items.add(
+            Media(
+              id: old[rel]?.id ?? _nextMediaId++,
+              sourceId: source.id,
+              relativePath: rel,
+              fileName: p.posix.basename(rel),
+              extension: p.posix.extension(rel).substring(1).toLowerCase(),
+              size: row['size'] as int? ?? 0,
+              modifiedAt: DateTime.fromMillisecondsSinceEpoch(
+                row['modified'] as int? ?? 0,
+              ),
+            ),
+          );
         }
-
-        final fileName = p.basename(relPath);
-        final ext = p.extension(relPath).replaceAll('.', '').toLowerCase();
-
-        mediaList.add(Media(
-          id: _nextMediaId++,
-          sourceId: source.id,
-          relativePath: relPath,
-          fileName: fileName,
-          extension: ext,
-          size: size,
-          modifiedAt: modifiedAt,
-        ));
+      } else {
+        if (!await _resolver.checkAvailability(source)) {
+          throw const FileSystemException('目录未连接或无法访问');
+        }
+        final paths = await _scanner.scan(
+          source.lastKnownPath,
+          recursive: source.recursive,
+        );
+        for (final rel in paths) {
+          final stat = await File(p.join(source.lastKnownPath, rel)).stat();
+          if (stat.type != FileSystemEntityType.file) continue;
+          items.add(
+            Media(
+              id: old[rel]?.id ?? _nextMediaId++,
+              sourceId: source.id,
+              relativePath: rel,
+              fileName: p.basename(rel),
+              extension: p.extension(rel).substring(1).toLowerCase(),
+              size: stat.size,
+              modifiedAt: stat.modified,
+            ),
+          );
+        }
       }
-
-      _mediaBySource[source.id] = mediaList;
-      
-      final index = _sources.indexWhere((s) => s.id == source.id);
-      if (index != -1) {
-        _sources[index] = source.copyWith(lastScanAt: DateTime.now());
-      }
+      if (!_sources.any((s) => s.id == source.id)) return;
+      await store?.replaceMedia(source.id, items);
+      _mediaBySource[source.id] = items;
+      final updated = source.copyWith(lastScanAt: DateTime.now());
+      _sources[_sources.indexWhere((s) => s.id == source.id)] = updated;
+      await store?.saveSource(updated);
+      revision++;
+    } catch (e) {
+      error = '扫描 ${source.name} 失败：$e';
     } finally {
       _isScanning = false;
-      notifyListeners();
+      _notify();
     }
   }
 
   Future<void> rescanAll() async {
-    final enabledSources = _sources.where((s) => s.enabled).toList();
-    for (final source in enabledSources) {
+    for (final source in _sources.where((s) => s.enabled).toList()) {
       await scanSource(source);
     }
   }
 
   Future<void> removeSource(int sourceId) async {
+    if (_isScanning) return;
     _sources.removeWhere((s) => s.id == sourceId);
     _mediaBySource.remove(sourceId);
-    notifyListeners();
+    await store?.removeSource(sourceId);
+    _notify(changed: true);
   }
 
   Future<void> toggleSource(int sourceId) async {
     final index = _sources.indexWhere((s) => s.id == sourceId);
-    if (index != -1) {
-      final source = _sources[index];
-      _sources[index] = source.copyWith(enabled: !source.enabled);
-      notifyListeners();
-    }
+    if (index < 0 || _isScanning) return;
+    final source = _sources[index].copyWith(enabled: !_sources[index].enabled);
+    _sources[index] = source;
+    await store?.saveSource(source);
+    _notify(changed: true);
   }
 
-  String? resolveMediaPath(Media media) {
-    final source = getSourceForMedia(media);
-    if (source == null) return null;
-    return p.join(source.lastKnownPath, media.relativePath);
-  }
-
-  Source? getSourceForMedia(Media media) {
+  Future<bool> isAvailable(Media media) async {
     try {
-      return _sources.firstWhere((s) => s.id == media.sourceId);
-    } catch (e) {
-      return null;
+      final original = getSourceForMedia(media);
+      if (original == null) return false;
+      final source = await _resolve(original);
+      if (source == null) return false;
+      return Platform.isAndroid && source.platform != 'test' ||
+          await _resolver.checkAvailability(source);
+    } catch (_) {
+      return false;
     }
   }
 
-  String getMediaDisplayPath(Media media) {
-    final source = getSourceForMedia(media);
-    final folderName = source?.name ?? 'Unknown';
-    return p.join(folderName, media.relativePath);
+  Future<String?> resolveMediaPath(Media media) async {
+    final original = getSourceForMedia(media);
+    if (original == null || !original.enabled) return null;
+    final source = await _resolve(original);
+    if (source == null) return null;
+    if (Platform.isAndroid && source.platform != 'test') {
+      return StorageBridge.media(source.locator, media.relativePath);
+    }
+    final path = await _resolver.resolveFullPath(source, media.relativePath);
+    return path != null && await File(path).exists() ? path : null;
+  }
+
+  Source? getSourceForMedia(Media media) =>
+      _sources.where((s) => s.id == media.sourceId).firstOrNull;
+  String getMediaDisplayPath(Media media) =>
+      p.join(getSourceForMedia(media)?.name ?? '', media.relativePath);
+
+  @override
+  void dispose() {
+    _disposed = true;
+    super.dispose();
   }
 }

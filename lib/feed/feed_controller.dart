@@ -1,164 +1,446 @@
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
-import 'package:reel_deck/queue/queue_engine.dart';
-import 'package:reel_deck/sources/source.dart';
-import 'package:reel_deck/sources/source_manager.dart';
+
+import '../database/database.dart';
+import '../database/library_store.dart';
+import '../player/player_pool.dart';
+import '../player/player_service.dart';
+import '../player/media_kit_player.dart';
+import '../queue/queue_engine.dart';
+import '../settings/settings.dart';
+import '../sources/source.dart';
+import '../sources/source_manager.dart';
 
 class FeedController extends ChangeNotifier {
   final QueueEngine queue;
   final SourceManager? sourceManager;
+  final LibraryStore? store;
+  final PlayerPool pool;
+  final AppSettings settings;
+  final List<StreamSubscription<dynamic>> _subscriptions = [];
+  final Map<int, Media> _media = {};
+  Set<int> _hidden = {}, _favorites = {};
+  final Set<int> _failed = {};
+  String? lastPlaybackError;
+  List<HiddenRuleEntry> _rules = [];
+  Future<void> _pending = Future.value();
+  bool _disposed = false, _ready = false, _showInfo = true;
+  int _revision = -1, _positionSaved = -1;
+  String? _path;
+  String? error;
+  bool busy = false, muted = false, fullscreen = false;
+  Duration position = Duration.zero, duration = Duration.zero;
+  String scope = 'all';
+  bool _playing = false;
 
-  // State
-  int? _currentMediaId;
-  String? _currentPath;
-  String? _currentFileName;
-  String? _currentFolder;
-  bool _isPlaying = false;
-  bool _isFavorite = false;
-  bool _showOverlay = true;
-  bool _showInfo = true;
-  String _videoFit = 'fit';
+  FeedController({
+    QueueEngine? queue,
+    this.sourceManager,
+    this.store,
+    PlayerPool? pool,
+    AppSettings? settings,
+  }) : queue = queue ?? QueueEngine(),
+       pool = pool ?? PlayerPool(),
+       settings = settings ?? AppSettings();
 
-  // Getters
-  int? get currentMediaId => _currentMediaId;
-  String? get currentPath => _currentPath;
-  String get currentFileName => _currentFileName ?? 'video.mp4';
-  String get currentFolder => _currentFolder ?? 'folder';
-  bool get isPlaying => _isPlaying;
-  bool get isFavorite => _isFavorite;
-  bool get showOverlay => _showOverlay;
+  int? get currentMediaId => queue.currentId;
+  Media? get currentMedia => _media[currentMediaId];
+  String? get currentPath => _path;
+  String get currentFileName => currentMedia?.fileName ?? '';
+  String get currentFolder => currentMedia == null
+      ? ''
+      : sourceManager?.getMediaDisplayPath(currentMedia!) ??
+            p.dirname(currentMedia!.relativePath);
+  bool get isPlaying => _playing;
+  bool get isFavorite => _favorites.contains(currentMediaId);
+  bool get showOverlay => true;
   bool get showInfo => _showInfo;
-  String get videoFit => _videoFit;
+  String get videoFit => settings.videoFit;
+  PlayerService? get player => pool.currentPlayer;
+  Future<void> get settled => _pending;
 
-  // Callbacks
-  VoidCallback? onVideoHidden;
-  VoidCallback? onFolderHidden;
-
-  FeedController({QueueEngine? queue, this.sourceManager})
-      : queue = queue ?? QueueEngine();
-
-  /// Loads media items and initializes the random playback queue.
-  void loadMediaList(List<Media> mediaList, {Set<int> hiddenIds = const {}}) {
-    final eligible = mediaList
-        .where((m) => !hiddenIds.contains(m.id))
-        .map((m) => m.id)
-        .toList();
-    queue.buildQueue(eligible);
-    _syncCurrentFromQueue(mediaList);
+  void _notify() {
+    if (!_disposed) notifyListeners();
   }
 
-  void _syncCurrentFromQueue([List<Media>? mediaList]) {
-    final curId = queue.currentId;
-    if (curId == null) {
-      _currentMediaId = null;
-      _currentPath = null;
-      _currentFileName = null;
-      _currentFolder = null;
-      notifyListeners();
-      return;
-    }
+  Future<void> _run(Future<void> Function() action) {
+    _pending = _pending.then((_) async {
+      if (_disposed) return;
+      try {
+        await action();
+      } catch (e) {
+        error = '操作失败：$e';
+      }
+      _notify();
+    });
+    return _pending;
+  }
 
-    _currentMediaId = curId;
-    final list = mediaList ?? sourceManager?.allMedia ?? [];
+  Future<void> initialize() => _run(() async {
+    await pool.initialize();
+    if (store != null) {
+      _favorites = await store!.db.stateDao.getFavoriteIds();
+      _hidden = await store!.db.stateDao.getHiddenMediaIds();
+      _rules = await store!.rules();
+    }
+    _refreshMedia();
+    final session = await store?.db.sessionDao.getLatestSession();
+    if (session != null) {
+      try {
+        scope = session.scope;
+        final ids = (jsonDecode(session.queue) as List).cast<int>();
+        queue.restore(ids, session.currentIndex);
+      } catch (_) {
+        queue.buildQueue([]);
+      }
+    }
+    queue.reconcile(_eligible());
+    _ready = true;
+    sourceManager?.addListener(_sourcesChanged);
+    settings.addListener(_settingsChanged);
+    await _open();
+  });
+
+  void _refreshMedia() {
+    _media.clear();
+    for (final m in sourceManager?.allMedia ?? <Media>[]) {
+      _media[m.id] = m;
+    }
+    _revision = sourceManager?.revision ?? 0;
+  }
+
+  List<int> _eligible() => _media.values
+      .where((m) {
+        if (_hidden.contains(m.id) || _failed.contains(m.id)) return false;
+        final source = sourceManager?.getSourceForMedia(m);
+        if (source != null && !source.enabled) return false;
+        if (scope == 'favorites' && !_favorites.contains(m.id)) return false;
+        if (scope.startsWith('source:') && scope != 'source:${m.sourceId}') {
+          return false;
+        }
+        final path = m.relativePath.replaceAll('\\', '/');
+        return !_rules.any((r) {
+          if (r.sourceId != m.sourceId) return false;
+          final folder = r.relativePath.replaceAll('\\', '/');
+          return folder == '.' ||
+              (r.recursive
+                  ? path.startsWith('$folder/')
+                  : p.posix.dirname(path) == folder);
+        });
+      })
+      .map((m) => m.id)
+      .toList();
+
+  void _sourcesChanged() {
+    if (!_ready || _revision == sourceManager?.revision) return;
+    _run(() async {
+      final previous = currentMediaId;
+      _failed.clear();
+      _refreshMedia();
+      queue.reconcile(_eligible());
+      if (previous != currentMediaId || _path == null) {
+        await _open();
+      } else {
+        await _saveSession();
+      }
+    });
+  }
+
+  void _settingsChanged() {
+    sourceManager?.recursive = settings.recursiveScan;
+    _run(() async {
+      await player?.setVolume(muted ? 0 : settings.defaultVolume);
+    });
+  }
+
+  Future<void> _saveSession() async {
+    if (store == null) return;
+    await store!.db.transaction(() async {
+      await store!.db.delete(store!.db.sessions).go();
+      await store!.db.sessionDao.saveSession(
+        SessionsCompanion.insert(
+          scope: scope,
+          queue: jsonEncode(queue.queue),
+          currentIndex: queue.currentIndex,
+          createdAt: DateTime.now(),
+        ),
+      );
+    });
+  }
+
+  Future<void> _savePosition() async {
+    final id = currentMediaId;
+    if (id != null && _path != null && store != null) {
+      await store!.db.stateDao.updatePosition(id, position.inMilliseconds);
+    }
+  }
+
+  Future<void> _unbind() async {
+    for (final sub in _subscriptions) {
+      await sub.cancel();
+    }
+    _subscriptions.clear();
+  }
+
+  void _bind() {
+    final active = player;
+    if (active == null) return;
+    _subscriptions.addAll([
+      active.positionStream.listen((value) {
+        position = value;
+        final second = value.inSeconds;
+        if (second ~/ 5 != _positionSaved && !busy) {
+          _positionSaved = second ~/ 5;
+          _run(_savePosition);
+        }
+        _notify();
+      }),
+      active.durationStream.listen((value) {
+        duration = value;
+        _notify();
+      }),
+      active.playingStream.listen((value) {
+        _playing = value;
+        _notify();
+      }),
+      active.completedStream.listen((done) {
+        if (done && !busy) next();
+      }),
+    ]);
+    if (active is MediaKitPlayerService) {
+      _subscriptions.add(
+        active.errors.listen((message) {
+          if (busy) return;
+          _run(() async {
+            await active.pause();
+            await _recover('无法播放 $currentFileName：$message');
+          });
+        }),
+      );
+    }
+  }
+
+  Future<void> _recover(String message) async {
+    lastPlaybackError = message;
+    final media = currentMedia;
+    if (media != null && await sourceManager?.isAvailable(media) == true) {
+      _failed.add(media.id);
+      queue.reconcile(_eligible());
+      if (queue.currentId != null) {
+        await _open();
+        return;
+      }
+    }
+    error = message;
+    _path = null;
+    await _saveSession();
+  }
+
+  Future<void> _open() async {
+    busy = true;
+    error = null;
+    _path = null;
+    _playing = false;
+    position = duration = Duration.zero;
+    _positionSaved = -1;
+    _notify();
+    await _unbind();
+    await player?.pause();
     try {
-      final media = list.firstWhere((m) => m.id == curId);
-      _currentFileName = media.fileName;
-      _currentFolder = p.dirname(media.relativePath);
-      if (_currentFolder == '.') {
-        _currentFolder = sourceManager?.getSourceForMedia(media)?.name ?? '';
-      }
-      _currentPath = sourceManager?.resolveMediaPath(media);
-    } catch (_) {
-      _currentFileName = 'video_$curId.mp4';
-      _currentPath = '/path/to/$_currentFileName';
-      _currentFolder = 'folder';
-    }
-    notifyListeners();
-  }
-
-  void next() {
-    if (queue.queue.isNotEmpty) {
-      if (queue.advance()) {
-        _syncCurrentFromQueue();
+      final media = currentMedia;
+      if (media == null) {
+        await _saveSession();
         return;
       }
-    }
-    // Fallback for mock/test runs
-    _currentMediaId = (_currentMediaId ?? 0) + 1;
-    _currentFileName = 'video_$_currentMediaId.mp4';
-    _currentPath = '/path/to/$_currentFileName';
-    notifyListeners();
-  }
-
-  void previous() {
-    if (queue.queue.isNotEmpty) {
-      if (queue.goBack()) {
-        _syncCurrentFromQueue();
+      final resolved = await sourceManager?.resolveMediaPath(media);
+      if (resolved == null) {
+        await _recover('视频或目录无法访问，请连接磁盘后重试，或重新授权目录。');
         return;
       }
+      if (pool.nextPlayer?.currentPath == resolved) {
+        await pool.swap();
+      } else {
+        await player?.open(resolved);
+      }
+      _path = resolved;
+      _bind();
+      position = player?.position ?? Duration.zero;
+      duration = player?.duration ?? Duration.zero;
+      await player?.setVolume(muted ? 0 : settings.defaultVolume);
+      if (settings.rememberPosition) {
+        final state = await store?.db.stateDao.getState(media.id);
+        if ((state?.lastPosition ?? 0) > 0) {
+          await player?.seekTo(Duration(milliseconds: state!.lastPosition!));
+        }
+      }
+      if (settings.autoplay) await player?.play();
+      await store?.db.stateDao.incrementPlayCount(media.id);
+      await _saveSession();
+      final next = _media[queue.nextId];
+      if (next != null) {
+        final nextPath = await sourceManager?.resolveMediaPath(next);
+        if (nextPath != null) {
+          try {
+            await pool.preloadNext(nextPath);
+          } catch (_) {
+            /* 当前视频继续播放。 */
+          }
+        }
+      }
+    } catch (e) {
+      await _recover('视频打开失败：$e');
+    } finally {
+      busy = false;
+      _notify();
     }
-    // Fallback for mock/test runs
-    _currentMediaId = (_currentMediaId ?? 0) - 1;
-    _currentFileName = 'video_$_currentMediaId.mp4';
-    _currentPath = '/path/to/$_currentFileName';
-    notifyListeners();
   }
 
-  void reshuffle() {
-    if (queue.queue.isNotEmpty) {
+  Future<void> next() => _run(() async {
+    await _savePosition();
+    if (!queue.advance()) {
+      if (!settings.loopQueue || queue.queue.isEmpty) {
+        await player?.pause();
+        return;
+      }
       queue.reshuffle();
-      _syncCurrentFromQueue();
-    } else {
-      notifyListeners();
     }
-  }
-
-  void togglePlayPause() {
-    _isPlaying = !_isPlaying;
-    notifyListeners();
-  }
-
-  void seekForward({Duration amount = const Duration(seconds: 5)}) {
-    // seek forward
-  }
-
-  void seekBackward({Duration amount = const Duration(seconds: 5)}) {
-    // seek backward
-  }
-
-  void toggleFavorite() {
-    _isFavorite = !_isFavorite;
-    notifyListeners();
-  }
-
-  void hideCurrentVideo() {
-    onVideoHidden?.call();
-    next();
-  }
-
-  void hideCurrentFolder() {
-    onFolderHidden?.call();
-    next();
-  }
-
-  void toggleOverlay() {
-    _showOverlay = !_showOverlay;
-    notifyListeners();
-  }
-
+    await _open();
+  });
+  Future<void> previous() => _run(() async {
+    if (queue.previousId == null) return;
+    await _savePosition();
+    queue.goBack();
+    await _open();
+  });
+  Future<void> reshuffle() => _run(() async {
+    await _savePosition();
+    queue.reshuffle();
+    await _open();
+  });
+  Future<void> retry() => _run(() async {
+    _failed.clear();
+    queue.reconcile(_eligible());
+    await _open();
+  });
+  Future<void> setScope(String value) => _run(() async {
+    await _savePosition();
+    scope = value;
+    queue.buildQueue(_eligible());
+    await _open();
+  });
+  Future<void> togglePlayPause() => _run(() async {
+    if (_path == null) return;
+    if (player!.isPlaying) {
+      await player!.pause();
+    } else {
+      await player!.play();
+    }
+  });
+  Future<void> seekTo(Duration value) => _run(() async {
+    if (_path == null) return;
+    await player?.seekTo(
+      Duration(
+        milliseconds: value.inMilliseconds.clamp(0, duration.inMilliseconds),
+      ),
+    );
+  });
+  void seekForward({Duration amount = const Duration(seconds: 5)}) =>
+      seekTo(position + amount);
+  void seekBackward({Duration amount = const Duration(seconds: 5)}) =>
+      seekTo(position - amount);
+  Future<void> toggleFavorite() => _run(() async {
+    final id = currentMediaId;
+    if (id == null) return;
+    final favorite = !_favorites.contains(id);
+    await store?.db.stateDao.setFavorite(id, favorite);
+    if (favorite) {
+      _favorites.add(id);
+    } else {
+      _favorites.remove(id);
+    }
+    if (scope == 'favorites' && !favorite) {
+      queue.reconcile(_eligible());
+      await _open();
+    }
+  });
+  Future<void> hideCurrentVideo() => _run(() async {
+    final id = currentMediaId;
+    if (id == null) return;
+    await store?.db.stateDao.setHidden(id, true);
+    _hidden.add(id);
+    queue.reconcile(_eligible());
+    await _open();
+  });
+  Future<void> hideCurrentFolder() => _run(() async {
+    final media = currentMedia;
+    if (media == null || store == null) return;
+    await store!.hideFolder(media.sourceId, p.dirname(media.relativePath));
+    _rules = await store!.rules();
+    queue.reconcile(_eligible());
+    await _open();
+  });
+  Future<void> resetHidden() => _run(() async {
+    await store?.resetHidden();
+    _hidden.clear();
+    _rules.clear();
+    queue.reconcile(_eligible());
+    await _open();
+  });
   void toggleInfo() {
     _showInfo = !_showInfo;
-    notifyListeners();
+    _notify();
   }
 
-  void cycleVideoFit() {
-    if (_videoFit == 'fit') {
-      _videoFit = 'fill';
-    } else if (_videoFit == 'fill') {
-      _videoFit = 'original';
+  void toggleOverlay() => toggleInfo();
+  void cycleVideoFit() => settings.update(
+    videoFit: videoFit == 'fit'
+        ? 'fill'
+        : videoFit == 'fill'
+        ? 'original'
+        : 'fit',
+  );
+  Future<void> toggleFullscreen() => _run(() async {
+    if (fullscreen) {
+      await defaultExitNativeFullscreen();
     } else {
-      _videoFit = 'fit';
+      await defaultEnterNativeFullscreen();
     }
-    notifyListeners();
+    fullscreen = !fullscreen;
+  });
+  void exitFullscreen() {
+    if (fullscreen) toggleFullscreen();
+  }
+
+  void setSpeed(double rate) {
+    final active = player;
+    if (active is MediaKitPlayerService) _run(() => active.setRate(rate));
+  }
+
+  Future<void> toggleMute() => _run(() async {
+    muted = !muted;
+    await player?.setVolume(muted ? 0 : settings.defaultVolume);
+  });
+  Future<void> suspend() => _run(() async {
+    await _savePosition();
+    await player?.pause();
+  });
+  Future<void> close() async {
+    sourceManager?.removeListener(_sourcesChanged);
+    settings.removeListener(_settingsChanged);
+    await _pending;
+    await _savePosition();
+    await _unbind();
+    await pool.dispose();
+  }
+
+  @override
+  void dispose() {
+    _disposed = true;
+    unawaited(close());
+    super.dispose();
   }
 }

@@ -16,7 +16,11 @@ class FeedGestureHandler extends StatefulWidget {
   final VoidCallback onHideFolder;
   final VoidCallback onReshuffle;
   final VoidCallback onToggleInfo;
-  
+  final VoidCallback? onToggleMute;
+  final VoidCallback? onFullscreen;
+  final VoidCallback? onExitFullscreen;
+  final ValueChanged<double>? onSpeed;
+
   const FeedGestureHandler({
     super.key,
     required this.child,
@@ -32,6 +36,10 @@ class FeedGestureHandler extends StatefulWidget {
     required this.onHideFolder,
     required this.onReshuffle,
     required this.onToggleInfo,
+    this.onToggleMute,
+    this.onFullscreen,
+    this.onExitFullscreen,
+    this.onSpeed,
   });
 
   @override
@@ -40,7 +48,8 @@ class FeedGestureHandler extends StatefulWidget {
 
 class _FeedGestureHandlerState extends State<FeedGestureHandler> {
   final FocusNode _focusNode = FocusNode();
-  DateTime _lastScrollTime = DateTime.now();
+  DateTime _lastScrollTime = DateTime.fromMillisecondsSinceEpoch(0);
+  double _scroll = 0, _drag = 0;
 
   @override
   void dispose() {
@@ -53,11 +62,14 @@ class _FeedGestureHandlerState extends State<FeedGestureHandler> {
     if (now.difference(_lastScrollTime).inMilliseconds < 300) {
       return; // cooldown
     }
-    
-    if (event.scrollDelta.dy > 10) {
+
+    _scroll += event.scrollDelta.dy;
+    if (_scroll > 45) {
+      _scroll = 0;
       _lastScrollTime = now;
       widget.onNext();
-    } else if (event.scrollDelta.dy < -10) {
+    } else if (_scroll < -45) {
+      _scroll = 0;
       _lastScrollTime = now;
       widget.onPrevious();
     }
@@ -70,14 +82,29 @@ class _FeedGestureHandlerState extends State<FeedGestureHandler> {
       autofocus: true,
       onKeyEvent: (FocusNode node, KeyEvent event) {
         if (event is KeyDownEvent) {
+          if (ModalRoute.of(context)?.isCurrent != true) {
+            return KeyEventResult.ignored;
+          }
           final isShift = HardwareKeyboard.instance.isShiftPressed;
-          
-          if (event.logicalKey == LogicalKeyboardKey.arrowDown || 
+
+          if (event.logicalKey == LogicalKeyboardKey.enter) {
+            widget.onFullscreen?.call();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.escape) {
+            widget.onExitFullscreen?.call();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.keyM) {
+            widget.onToggleMute?.call();
+            return KeyEventResult.handled;
+          }
+          if (event.logicalKey == LogicalKeyboardKey.arrowDown ||
               event.logicalKey == LogicalKeyboardKey.keyJ) {
             widget.onNext();
             return KeyEventResult.handled;
-          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp || 
-                     event.logicalKey == LogicalKeyboardKey.keyK) {
+          } else if (event.logicalKey == LogicalKeyboardKey.arrowUp ||
+              event.logicalKey == LogicalKeyboardKey.keyK) {
             widget.onPrevious();
             return KeyEventResult.handled;
           } else if (event.logicalKey == LogicalKeyboardKey.space) {
@@ -128,8 +155,43 @@ class _FeedGestureHandlerState extends State<FeedGestureHandler> {
             // Desktop hover overlay triggering logic can be added here
           },
           child: GestureDetector(
-            onTap: widget.onTogglePlayPause,
+            behavior: HitTestBehavior.opaque,
+            onVerticalDragStart: (_) {
+              _drag = 0;
+            },
+            onVerticalDragUpdate: (d) {
+              _drag += d.delta.dy;
+            },
+            onVerticalDragEnd: (d) {
+              final velocity = d.primaryVelocity ?? 0;
+              if (_drag < -60 || velocity < -500) {
+                widget.onNext();
+              } else if (_drag > 60 || velocity > 500) {
+                widget.onPrevious();
+              }
+            },
+            onTap: () {
+              _focusNode.requestFocus();
+              widget.onTogglePlayPause();
+            },
             onDoubleTap: widget.onToggleFavorite,
+            onLongPressStart: (_) => widget.onSpeed?.call(2),
+            onLongPressEnd: (_) => widget.onSpeed?.call(1),
+            onLongPressCancel: () => widget.onSpeed?.call(1),
+            onHorizontalDragStart: (_) {
+              _drag = 0;
+            },
+            onHorizontalDragUpdate: (d) {
+              _drag += d.delta.dx;
+              if (_drag > 30) {
+                _drag = 0;
+                widget.onSeekForward();
+              }
+              if (_drag < -30) {
+                _drag = 0;
+                widget.onSeekBackward();
+              }
+            },
             child: widget.child,
           ),
         ),

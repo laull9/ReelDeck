@@ -9,13 +9,14 @@ class PlayerPool {
   PlayerService? _nextPlayer;
 
   PlayerPool({PlayerService Function()? playerFactory})
-      : _playerFactory = playerFactory ?? MediaKitPlayerService.new;
+    : _playerFactory = playerFactory ?? MediaKitPlayerService.new;
 
   PlayerService? get currentPlayer => _currentPlayer;
   PlayerService? get nextPlayer => _nextPlayer;
 
   /// Initializes the pool by creating exactly 2 players.
   Future<void> initialize() async {
+    if (_currentPlayer != null) return;
     _currentPlayer = _playerFactory();
     _nextPlayer = _playerFactory();
   }
@@ -35,6 +36,13 @@ class PlayerPool {
     if (player != null) {
       await player.open(path);
     }
+  }
+
+  Future<void> swap() async {
+    await _currentPlayer?.pause();
+    final previous = _currentPlayer;
+    _currentPlayer = _nextPlayer;
+    _nextPlayer = previous;
   }
 
   /// Swaps the players. The next player becomes the current player and starts playing.

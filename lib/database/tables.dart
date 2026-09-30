@@ -25,8 +25,8 @@ class Media extends Table {
 
   @override
   List<Set<Column>> get uniqueKeys => [
-        {sourceId, relativePath}
-      ];
+    {sourceId, relativePath},
+  ];
 }
 
 @DataClassName('MediaStateEntry')

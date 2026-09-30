@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+
 import 'database.dart';
 import 'tables.dart';
 
@@ -44,8 +45,9 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
         innerJoin(sources, sources.id.equalsExp(media.sourceId)),
       ])
       ..where(
-          (mediaStates.hidden.isNull() | mediaStates.hidden.equals(false)) &
-          sources.enabled.equals(true));
+        (mediaStates.hidden.isNull() | mediaStates.hidden.equals(false)) &
+            sources.enabled.equals(true),
+      );
 
     return query.map((row) => row.read(media.id)!).get();
   }
@@ -53,9 +55,7 @@ class MediaDao extends DatabaseAccessor<AppDatabase> with _$MediaDaoMixin {
   Future<List<int>> getFavoriteMediaIds() async {
     final query = selectOnly(media)
       ..addColumns([media.id])
-      ..join([
-        innerJoin(mediaStates, mediaStates.mediaId.equalsExp(media.id)),
-      ])
+      ..join([innerJoin(mediaStates, mediaStates.mediaId.equalsExp(media.id))])
       ..where(mediaStates.favorite.equals(true));
 
     return query.map((row) => row.read(media.id)!).get();

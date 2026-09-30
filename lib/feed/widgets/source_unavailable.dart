@@ -20,11 +20,7 @@ class SourceUnavailable extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.usb_off,
-            size: 64,
-            color: Colors.redAccent,
-          ),
+          const Icon(Icons.usb_off, size: 64, color: Colors.redAccent),
           const SizedBox(height: 16),
           const Text(
             'External drive disconnected',
@@ -37,10 +33,7 @@ class SourceUnavailable extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             sourceName,
-            style: const TextStyle(
-              color: Colors.white54,
-              fontSize: 14,
-            ),
+            style: const TextStyle(color: Colors.white54, fontSize: 14),
           ),
           const SizedBox(height: 24),
           Row(
@@ -51,10 +44,7 @@ class SourceUnavailable extends StatelessWidget {
                 child: const Text('Change Source'),
               ),
               const SizedBox(width: 16),
-              ElevatedButton(
-                onPressed: onRetry,
-                child: const Text('Retry'),
-              ),
+              ElevatedButton(onPressed: onRetry, child: const Text('Retry')),
             ],
           ),
         ],

@@ -13,11 +13,7 @@ class EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          const Icon(
-            Icons.folder_open,
-            size: 64,
-            color: Colors.white54,
-          ),
+          const Icon(Icons.folder_open, size: 64, color: Colors.white54),
           const SizedBox(height: 16),
           const Text(
             'Select a folder to start',

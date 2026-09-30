@@ -10,6 +10,22 @@ class QueueEngine {
   List<int> _queue = [];
   int _currentIndex = -1;
 
+  void restore(List<int> ids, int index) {
+    _queue = ids.toSet().toList();
+    _currentIndex = _queue.isEmpty ? -1 : index.clamp(0, _queue.length - 1);
+  }
+
+  void reconcile(List<int> eligible) {
+    final current = currentId;
+    final allowed = eligible.toSet();
+    final retained = _queue.where(allowed.contains).toList();
+    final existing = retained.toSet();
+    final added = eligible.where((id) => !existing.contains(id)).toList();
+    fisherYatesShuffle(added, random: _random);
+    final index = current == null ? 0 : retained.indexOf(current);
+    restore([...retained, ...added], index < 0 ? _currentIndex : index);
+  }
+
   /// Current list of media IDs in the queue.
   List<int> get queue => List.unmodifiable(_queue);
 
@@ -73,7 +89,7 @@ class QueueEngine {
   /// If the queue has more than 1 item, avoids repeating the last played item immediately.
   void reshuffle() {
     if (_queue.isEmpty) return;
-    final previousLast = _queue.last;
+    final previousLast = currentId;
     fisherYatesShuffle(_queue, random: _random);
     if (_queue.length > 1 && _queue.first == previousLast) {
       final swapIndex = 1 + _random.nextInt(_queue.length - 1);

@@ -1,11 +1,12 @@
 import 'dart:async';
 
-import 'package:flutter_test/flutter_test.dart';
-import 'package:reel_deck/player/player_pool.dart';
 import 'package:reel_deck/player/player_service.dart';
 
 class FakePlayerService implements PlayerService {
   String? _path;
+  double volume = 1;
+  int opens = 0;
+  bool failOpen = false;
   bool _isPlaying = false;
   Duration _position = Duration.zero;
   final Duration _duration = const Duration(minutes: 1);
@@ -41,6 +42,9 @@ class FakePlayerService implements PlayerService {
 
   @override
   Future<void> open(String path) async {
+    opens++;
+    if (failOpen) throw StateError('损坏的视频');
+    _position = Duration.zero;
     _path = path;
   }
 
@@ -63,7 +67,13 @@ class FakePlayerService implements PlayerService {
   }
 
   @override
-  Future<void> setVolume(double volume) async {}
+  Future<void> setVolume(double volume) async {
+    this.volume = volume;
+  }
+
+  void complete() {
+    _completedController.add(true);
+  }
 
   @override
   Future<void> dispose() async {
@@ -72,41 +82,4 @@ class FakePlayerService implements PlayerService {
     await _durationController.close();
     await _completedController.close();
   }
-}
-
-void main() {
-  test('PlayerPool initialization and advanceToNext logic', () async {
-    final pool = PlayerPool(playerFactory: FakePlayerService.new);
-    expect(pool.currentPlayer, isNull);
-    expect(pool.nextPlayer, isNull);
-
-    await pool.initialize();
-
-    expect(pool.currentPlayer, isNotNull);
-    expect(pool.nextPlayer, isNotNull);
-
-    final initialCurrent = pool.currentPlayer;
-    final initialNext = pool.nextPlayer;
-
-    await pool.advanceToNext();
-
-    expect(pool.currentPlayer, equals(initialNext));
-    expect(pool.nextPlayer, equals(initialCurrent));
-    expect(pool.currentPlayer?.isPlaying, isTrue);
-  });
-
-  test('PlayerPool goToPrevious logic', () async {
-    final pool = PlayerPool(playerFactory: FakePlayerService.new);
-    await pool.initialize();
-
-    final initialCurrent = pool.currentPlayer;
-    final initialNext = pool.nextPlayer;
-
-    await pool.goToPrevious('test_path.mp4');
-
-    expect(pool.currentPlayer, equals(initialNext));
-    expect(pool.nextPlayer, equals(initialCurrent));
-    expect(pool.currentPlayer?.currentPath, equals('test_path.mp4'));
-    expect(pool.currentPlayer?.isPlaying, isTrue);
-  });
 }

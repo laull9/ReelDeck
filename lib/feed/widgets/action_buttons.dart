@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+
 import '../feed_controller.dart';
+
 import 'package:provider/provider.dart';
 
 class ActionButtons extends StatelessWidget {
@@ -18,7 +20,10 @@ class ActionButtons extends StatelessWidget {
             children: [
               ListTile(
                 leading: const Icon(Icons.visibility_off, color: Colors.white),
-                title: const Text('Hide Video', style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  '隐藏视频',
+                  style: TextStyle(color: Colors.white),
+                ),
                 onTap: () {
                   controller.hideCurrentVideo();
                   Navigator.pop(context);
@@ -26,7 +31,10 @@ class ActionButtons extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.folder_off, color: Colors.white),
-                title: const Text('Hide Folder', style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  '隐藏所在目录（含子目录）',
+                  style: TextStyle(color: Colors.white),
+                ),
                 onTap: () {
                   controller.hideCurrentFolder();
                   Navigator.pop(context);
@@ -34,7 +42,10 @@ class ActionButtons extends StatelessWidget {
               ),
               ListTile(
                 leading: const Icon(Icons.aspect_ratio, color: Colors.white),
-                title: const Text('Toggle Video Fit', style: TextStyle(color: Colors.white)),
+                title: const Text(
+                  '切换画面适配',
+                  style: TextStyle(color: Colors.white),
+                ),
                 onTap: () {
                   controller.cycleVideoFit();
                   Navigator.pop(context);
@@ -49,34 +60,39 @@ class ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedOpacity(
-      opacity: visible ? 1.0 : 0.0,
-      duration: const Duration(milliseconds: 200),
-      child: Consumer<FeedController>(
-        builder: (context, controller, _) {
-          return Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: Icon(
-                  controller.isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: controller.isFavorite ? Colors.red : Colors.white,
-                  size: 32,
+    return IgnorePointer(
+      ignoring: !visible,
+      child: AnimatedOpacity(
+        opacity: visible ? 1.0 : 0.0,
+        duration: const Duration(milliseconds: 200),
+        child: Consumer<FeedController>(
+          builder: (context, controller, _) {
+            return Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: Icon(
+                    controller.isFavorite
+                        ? Icons.favorite
+                        : Icons.favorite_border,
+                    color: controller.isFavorite ? Colors.red : Colors.white,
+                    size: 32,
+                  ),
+                  onPressed: () => controller.toggleFavorite(),
                 ),
-                onPressed: () => controller.toggleFavorite(),
-              ),
-              const SizedBox(height: 16),
-              IconButton(
-                icon: const Icon(
-                  Icons.more_horiz,
-                  color: Colors.white,
-                  size: 32,
+                const SizedBox(height: 16),
+                IconButton(
+                  icon: const Icon(
+                    Icons.more_horiz,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  onPressed: () => _showMoreMenu(context, controller),
                 ),
-                onPressed: () => _showMoreMenu(context, controller),
-              ),
-            ],
-          );
-        },
+              ],
+            );
+          },
+        ),
       ),
     );
   }

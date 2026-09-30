@@ -31,9 +31,15 @@ class SourceScanner {
     }
 
     final relativePaths = <String>[];
-    await for (final entity in dir.list(recursive: recursive, followLinks: false)) {
+    await for (final entity in dir.list(
+      recursive: recursive,
+      followLinks: false,
+    )) {
       if (entity is File) {
-        final ext = p.extension(entity.path).toLowerCase().replaceFirst('.', '');
+        final ext = p
+            .extension(entity.path)
+            .toLowerCase()
+            .replaceFirst('.', '');
         if (supportedExtensions.contains(ext)) {
           relativePaths.add(p.relative(entity.path, from: rootPath));
         }

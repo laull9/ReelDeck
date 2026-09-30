@@ -1,7 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'dart:async';
+
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
+
 import 'player_service.dart';
 
 class MediaKitPlayerService implements PlayerService {
@@ -16,52 +17,26 @@ class MediaKitPlayerService implements PlayerService {
     _controller = VideoController(_player);
   }
 
+  Future<void> setRate(double rate) => _player.setRate(rate);
+
+  Stream<String> get errors => _player.stream.error;
+
   @override
   Future<void> open(String path) async {
+    _currentPath = null;
+    await _player.open(Media(path), play: false);
     _currentPath = path;
-    try {
-      await _player.open(Media(path), play: false);
-    } catch (e) {
-      // Handle gracefully
-      debugPrint('Error opening media: $e');
-    }
   }
 
   @override
-  Future<void> play() async {
-    try {
-      await _player.play();
-    } catch (e) {
-      debugPrint('Error playing media: $e');
-    }
-  }
-
+  Future<void> play() => _player.play();
   @override
-  Future<void> pause() async {
-    try {
-      await _player.pause();
-    } catch (e) {
-      debugPrint('Error pausing media: $e');
-    }
-  }
-
+  Future<void> pause() => _player.pause();
   @override
-  Future<void> seekTo(Duration position) async {
-    try {
-      await _player.seek(position);
-    } catch (e) {
-      debugPrint('Error seeking media: $e');
-    }
-  }
-
+  Future<void> seekTo(Duration position) => _player.seek(position);
   @override
-  Future<void> setVolume(double volume) async {
-    try {
-      await _player.setVolume(volume * 100.0); // media_kit volume is 0-100
-    } catch (e) {
-      debugPrint('Error setting volume: $e');
-    }
-  }
+  Future<void> setVolume(double volume) =>
+      _player.setVolume(volume.clamp(0, 1) * 100);
 
   @override
   Future<void> dispose() async {

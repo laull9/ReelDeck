@@ -4,11 +4,7 @@ class ProgressBar extends StatelessWidget {
   final double progress; // 0.0 to 1.0
   final ValueChanged<double>? onSeek;
 
-  const ProgressBar({
-    super.key,
-    required this.progress,
-    this.onSeek,
-  });
+  const ProgressBar({super.key, required this.progress, this.onSeek});
 
   @override
   Widget build(BuildContext context) {
@@ -42,9 +38,7 @@ class ProgressBar extends StatelessWidget {
           alignment: Alignment.centerLeft,
           child: FractionallySizedBox(
             widthFactor: progress.clamp(0.0, 1.0),
-            child: Container(
-              color: Colors.white,
-            ),
+            child: Container(color: Colors.white),
           ),
         ),
       ),

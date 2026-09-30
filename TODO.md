@@ -1,6 +1,6 @@
 # ReelDeck 开发进度
 
-## 已完成 (MVP)
+## 已完成 (V1)
 - [x] 项目骨架搭建与 Git 初始化 (Flutter 3.47.5 / macOS, Windows, Android)
 - [x] 数据存储层 (Drift SQLite)
   - [x] Sources, Media, MediaStates, HiddenRules, Sessions 表定义
@@ -29,11 +29,12 @@
   - [x] 设置界面 (SettingsScreen)
   - [x] 全局 MultiProvider 状态注入
 - [x] 自动化测试
-  - [x] 24 项单元测试与 Widget 测试全部通过
-  - [x] 代码静态分析零告警
+  - [x] 数据库重启、扫描更新、队列恢复、播放器状态和手势测试
+  - [x] `flutter analyze` 零问题
+  - [x] `flutter test` 全部通过
 
-## 待推进 (V1.1 / 后续优化)
-- [ ] macOS Security-Scoped Bookmarks 原生通道接入
-- [ ] Windows Volume GUID / 卷标持久化识别
-- [ ] 播放历史与断点续播位置恢复
-- [ ] 收藏夹独立 Feed 筛选视图
+## 待推进（设备验收与后续优化）
+- [ ] 在安装完整 Xcode 的 macOS 机器上完成 release 构建和沙盒权限验收
+- [ ] 在 Android Studio 补齐 NDK 后完成 APK 构建与真实 SAF 设备验收
+- [ ] Windows 真机验证卷 GUID 迁移和媒体解码
+- [ ] 播放错误历史查看与更细的设置持久化界面

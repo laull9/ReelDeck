@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+
 import 'database.dart';
 import 'tables.dart';
 
@@ -9,8 +10,14 @@ class SessionDao extends DatabaseAccessor<AppDatabase> with _$SessionDaoMixin {
   SessionDao(super.db);
 
   Future<SessionEntry?> getLatestSession() =>
-      (select(sessions)..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.desc)])
-        ..limit(1))
+      (select(sessions)
+            ..orderBy([
+              (t) => OrderingTerm(
+                expression: t.createdAt,
+                mode: OrderingMode.desc,
+              ),
+            ])
+            ..limit(1))
           .getSingleOrNull();
 
   Future<int> saveSession(SessionsCompanion session) =>

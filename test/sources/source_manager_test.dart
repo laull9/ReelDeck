@@ -1,4 +1,5 @@
 import 'dart:io';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:reel_deck/sources/source_manager.dart';
 import 'package:reel_deck/sources/source.dart';
@@ -18,12 +19,12 @@ class MockScanner implements SourceScanner {
 
 class MockResolver implements SourceResolver {
   bool isAvailable = true;
-  
+
   @override
   Future<String?> resolveFullPath(Source source, String relativePath) async {
     return p.join(source.lastKnownPath, relativePath);
   }
-  
+
   @override
   Future<bool> checkAvailability(Source source) async {
     return isAvailable;
@@ -64,11 +65,11 @@ void main() {
 
       // Manager starts empty
       expect(manager.allMedia, isEmpty);
-      
+
       // Inject the source to manager's internal state
       manager.addSource(source);
       expect(manager.sources.length, 1);
-      
+
       await manager.scanSource(source);
 
       expect(manager.allMedia.length, 2);
@@ -79,7 +80,7 @@ void main() {
       final m2 = manager.allMedia.firstWhere((m) => m.fileName == 'video2.mkv');
       expect(m2.extension, 'mkv');
       expect(m2.relativePath, p.join('subdir', 'video2.mkv'));
-      
+
       // Check lastScanAt is updated
       expect(manager.sources.first.lastScanAt, isNotNull);
     });
@@ -93,15 +94,15 @@ void main() {
         platform: 'test',
       );
       manager.addSource(source);
-      
+
       await File(p.join(tempDir.path, 'video1.mp4')).create();
       await manager.scanSource(source);
-      
+
       expect(manager.sources, isNotEmpty);
       expect(manager.allMedia, isNotEmpty);
-      
+
       manager.removeSource(source.id);
-      
+
       expect(manager.sources, isEmpty);
       expect(manager.allMedia, isEmpty);
     });
@@ -116,12 +117,12 @@ void main() {
         enabled: true,
       );
       manager.addSource(source);
-      
+
       expect(manager.sources.first.enabled, true);
-      
+
       manager.toggleSource(1);
       expect(manager.sources.first.enabled, false);
-      
+
       manager.toggleSource(1);
       expect(manager.sources.first.enabled, true);
     });
