@@ -11,6 +11,7 @@ import '../sources/source_manager.dart';
 import '../feed/feed_controller.dart';
 import '../feed/feed_screen.dart';
 import '../settings/settings_screen.dart';
+import '../shortcuts/shortcuts_screen.dart';
 import '../sources/sources_screen.dart';
 import 'theme.dart';
 import 'routes.dart';
@@ -106,6 +107,7 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
       routes: {
         AppRoutes.settings: (_) => const SettingsScreen(),
         AppRoutes.sources: (_) => const SourcesScreen(),
+        AppRoutes.shortcuts: (_) => const ShortcutsScreen(),
       },
     ),
   );

@@ -1,0 +1,174 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: '发布版本标签 (如 v0.1.0)'
+        required: false
+        default: ''
+      draft:
+        description: '作为草稿发布'
+        type: boolean
+        default: false
+      prerelease:
+        description: '作为预发布版本'
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-macos:
+    name: Build macOS App
+    runs-on: macos-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Verify Flutter environment
+        run: flutter doctor -v
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Run tests
+        run: flutter test
+
+      - name: Build macOS app
+        run: flutter build macos --release
+
+      - name: Package macOS app
+        run: |
+          cd build/macos/Build/Products/Release
+          if [ -d "ReelDeck.app" ]; then
+            ditto -c -k --sequesterRsrc --keepParent ReelDeck.app "$GITHUB_WORKSPACE/ReelDeck-macos.zip"
+          else
+            ditto -c -k --sequesterRsrc --keepParent reel_deck.app "$GITHUB_WORKSPACE/ReelDeck-macos.zip"
+          fi
+          cd "$GITHUB_WORKSPACE"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReelDeck-macos
+          path: ReelDeck-macos.zip
+          if-no-files-found: error
+
+  build-windows:
+    name: Build Windows Exe
+    runs-on: windows-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package Windows release
+        shell: pwsh
+        run: |
+          Compress-Archive -Path build\windows\x64\runner\Release\* -DestinationPath ReelDeck-windows-x64.zip
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReelDeck-windows
+          path: ReelDeck-windows-x64.zip
+          if-no-files-found: error
+
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      - name: Setup Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Build Android APK
+        run: flutter build apk --release
+
+      - name: Package Android APK
+        run: |
+          cp build/app/outputs/flutter-apk/app-release.apk ReelDeck-android.apk
+
+      - name: Upload Android artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ReelDeck-android
+          path: ReelDeck-android.apk
+          if-no-files-found: error
+
+  release:
+    name: Publish Release
+    needs: [build-macos, build-windows, build-android]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Determine tag name
+        id: tag
+        run: |
+          if [ -n "${{ github.event.inputs.tag_name }}" ]; then
+            echo "val=${{ github.event.inputs.tag_name }}" >> $GITHUB_OUTPUT
+          elif [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            echo "val=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          else
+            echo "val=v0.2.0" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.val }}
+          name: ReelDeck ${{ steps.tag.outputs.val }}
+          draft: ${{ github.event.inputs.draft || false }}
+          prerelease: ${{ github.event.inputs.prerelease || false }}
+          generate_release_notes: true
+          files: |
+            dist/ReelDeck-macos.zip
+            dist/ReelDeck-windows-x64.zip
+            dist/ReelDeck-android.apk

@@ -36,6 +36,11 @@ class FeedController extends ChangeNotifier {
   Duration position = Duration.zero, duration = Duration.zero;
   String scope = 'all';
   bool _playing = false;
+  bool _isScrubbing = false;
+  Duration? _scrubTarget;
+  bool _seekInProgress = false;
+
+  bool get isScrubbing => _isScrubbing;
 
   FeedController({
     QueueEngine? queue,
@@ -55,6 +60,10 @@ class FeedController extends ChangeNotifier {
       ? ''
       : sourceManager?.getMediaDisplayPath(currentMedia!) ??
             p.dirname(currentMedia!.relativePath);
+  int get queueLength => queue.queue.length;
+  int get queueIndex => queue.currentIndex;
+  int? get currentFileSize => currentMedia?.size;
+  String get currentFileExtension => currentMedia?.extension ?? '';
   bool get isPlaying => _playing;
   bool get isFavorite => _favorites.contains(currentMediaId);
   bool get showOverlay => true;
@@ -152,23 +161,20 @@ class FeedController extends ChangeNotifier {
 
   void _settingsChanged() {
     sourceManager?.recursive = settings.recursiveScan;
-    _run(() async {
-      await player?.setVolume(muted ? 0 : settings.defaultVolume);
-    });
+    player?.setVolume(muted ? 0 : settings.defaultVolume);
+    _notify();
   }
 
   Future<void> _saveSession() async {
     if (store == null) return;
     await store!.db.transaction(() async {
       await store!.db.delete(store!.db.sessions).go();
-      await store!.db.sessionDao.saveSession(
-        SessionsCompanion.insert(
-          scope: scope,
-          queue: jsonEncode(queue.queue),
-          currentIndex: queue.currentIndex,
-          createdAt: DateTime.now(),
-        ),
-      );
+      await store!.db.sessionDao.saveSession(SessionsCompanion.insert(
+        scope: scope,
+        queue: jsonEncode(queue.queue),
+        currentIndex: queue.currentIndex,
+        createdAt: DateTime.now(),
+      ));
     });
   }
 
@@ -191,13 +197,15 @@ class FeedController extends ChangeNotifier {
     if (active == null) return;
     _subscriptions.addAll([
       active.positionStream.listen((value) {
-        position = value;
-        final second = value.inSeconds;
-        if (second ~/ 5 != _positionSaved && !busy) {
-          _positionSaved = second ~/ 5;
-          _run(_savePosition);
+        if (!_isScrubbing) {
+          position = value;
+          final second = value.inSeconds;
+          if (second ~/ 5 != _positionSaved && !busy) {
+            _positionSaved = second ~/ 5;
+            _run(_savePosition);
+          }
+          _notify();
         }
-        _notify();
       }),
       active.durationStream.listen((value) {
         duration = value;
@@ -342,12 +350,56 @@ class FeedController extends ChangeNotifier {
   });
   Future<void> seekTo(Duration value) => _run(() async {
     if (_path == null) return;
-    await player?.seekTo(
-      Duration(
-        milliseconds: value.inMilliseconds.clamp(0, duration.inMilliseconds),
-      ),
+    final clamped = Duration(
+      milliseconds: value.inMilliseconds.clamp(0, duration.inMilliseconds),
     );
+    position = clamped;
+    _notify();
+    await player?.seekTo(clamped);
   });
+
+  void startScrub() {
+    _isScrubbing = true;
+  }
+
+  void scrubTo(Duration target) {
+    if (_path == null) return;
+    final clamped = Duration(
+      milliseconds: target.inMilliseconds.clamp(0, duration.inMilliseconds),
+    );
+    _scrubTarget = clamped;
+    position = clamped;
+    _notify();
+    _dispatchThrottledSeek();
+  }
+
+  void _dispatchThrottledSeek() {
+    if (_seekInProgress || _scrubTarget == null || _path == null) return;
+    final target = _scrubTarget!;
+    _scrubTarget = null;
+    _seekInProgress = true;
+    player?.seekTo(target).whenComplete(() {
+      _seekInProgress = false;
+      if (_scrubTarget != null) {
+        _dispatchThrottledSeek();
+      }
+    });
+  }
+
+  Future<void> endScrub([Duration? finalTarget]) async {
+    _isScrubbing = false;
+    final target = finalTarget ?? _scrubTarget ?? position;
+    _scrubTarget = null;
+    if (_path != null) {
+      final clamped = Duration(
+        milliseconds: target.inMilliseconds.clamp(0, duration.inMilliseconds),
+      );
+      position = clamped;
+      await player?.seekTo(clamped);
+    }
+    _notify();
+  }
+
   void seekForward({Duration amount = const Duration(seconds: 5)}) =>
       seekTo(position + amount);
   void seekBackward({Duration amount = const Duration(seconds: 5)}) =>
@@ -396,19 +448,12 @@ class FeedController extends ChangeNotifier {
   }
 
   void toggleOverlay() => toggleInfo();
-  void cycleVideoFit() => settings.update(
-    videoFit: videoFit == 'fit'
-        ? 'fill'
-        : videoFit == 'fill'
-        ? 'original'
-        : 'fit',
-  );
+  void cycleVideoFit() {
+    final next = switch (videoFit) { 'fit' => 'fill', 'fill' => 'original', _ => 'fit' };
+    settings.update(videoFit: next);
+  }
   Future<void> toggleFullscreen() => _run(() async {
-    if (fullscreen) {
-      await defaultExitNativeFullscreen();
-    } else {
-      await defaultEnterNativeFullscreen();
-    }
+    fullscreen ? await defaultExitNativeFullscreen() : await defaultEnterNativeFullscreen();
     fullscreen = !fullscreen;
   });
   void exitFullscreen() {

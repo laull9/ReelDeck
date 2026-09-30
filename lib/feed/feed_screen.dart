@@ -8,9 +8,19 @@ import '../sources/source_manager.dart';
 import 'feed_controller.dart';
 import 'feed_gestures.dart';
 import 'widgets/action_buttons.dart';
+import 'widgets/formatters.dart';
+import 'widgets/progress_bar.dart';
 
-class FeedScreen extends StatelessWidget {
+class FeedScreen extends StatefulWidget {
   const FeedScreen({super.key});
+
+  @override
+  State<FeedScreen> createState() => _FeedScreenState();
+}
+
+class _FeedScreenState extends State<FeedScreen> {
+  final GlobalKey<FeedGestureHandlerState> _gestureKey =
+      GlobalKey<FeedGestureHandlerState>();
 
   Future<void> _navigate(BuildContext context, String route) async {
     final feed = context.read<FeedController>();
@@ -34,8 +44,17 @@ class FeedScreen extends StatelessWidget {
       backgroundColor: Colors.black,
       body: SafeArea(
         child: FeedGestureHandler(
+          key: _gestureKey,
+          shortcuts: feed.settings.shortcuts,
           onNext: feed.next,
           onPrevious: feed.previous,
+          incomingChild: (feed.pool.nextPlayer is MediaKitPlayerService &&
+                  feed.pool.nextPlayer?.currentPath != null)
+              ? VideoPlayerWidget(
+                  player: feed.pool.nextPlayer as MediaKitPlayerService,
+                  fit: fit,
+                )
+              : null,
           onTogglePlayPause: feed.togglePlayPause,
           onToggleFavorite: feed.toggleFavorite,
           onSeekForward: feed.seekForward,
@@ -193,6 +212,41 @@ class FeedScreen extends StatelessWidget {
                         ),
                       ),
                     ),
+                    if (feed.showInfo &&
+                        settings.showQueueProgress &&
+                        feed.queueLength > 0) ...[
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withAlpha(20),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.white12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.shuffle,
+                              size: 13,
+                              color: Colors.white70,
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              '${feed.queueIndex >= 0 ? feed.queueIndex + 1 : 0} / ${feed.queueLength}',
+                              style: const TextStyle(
+                                color: Colors.white70,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
                     IconButton(
                       tooltip: '管理目录',
                       icon: const Icon(Icons.folder_open),
@@ -235,11 +289,90 @@ class FeedScreen extends StatelessWidget {
                             fontSize: 12,
                           ),
                         ),
+                      if (feed.showInfo &&
+                          (settings.showFileSize || settings.showVideoFormat)) ...[
+                        const SizedBox(height: 4),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            if (settings.showFileSize &&
+                                feed.currentFileSize != null)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(22),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.white12,
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(
+                                      Icons.sd_storage_outlined,
+                                      size: 11,
+                                      color: Colors.white70,
+                                    ),
+                                    const SizedBox(width: 3),
+                                    Text(
+                                      formatFileSize(feed.currentFileSize!),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        color: Colors.white70,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            if (settings.showVideoFormat &&
+                                feed.currentFileExtension.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 6,
+                                  vertical: 2,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withAlpha(22),
+                                  borderRadius: BorderRadius.circular(4),
+                                  border: Border.all(
+                                    color: Colors.white12,
+                                    width: 0.5,
+                                  ),
+                                ),
+                                child: Text(
+                                  feed.currentFileExtension
+                                      .toUpperCase()
+                                      .replaceAll('.', ''),
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white70,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                       Row(
                         children: [
                           IconButton(
                             tooltip: '上一条',
-                            onPressed: feed.previous,
+                            onPressed: () {
+                              final state = _gestureKey.currentState;
+                              if (state != null) {
+                                state.animatePrevious();
+                              } else {
+                                feed.previous();
+                              }
+                            },
                             icon: const Icon(Icons.skip_previous),
                           ),
                           IconButton(
@@ -251,7 +384,14 @@ class FeedScreen extends StatelessWidget {
                           ),
                           IconButton(
                             tooltip: '下一条',
-                            onPressed: feed.next,
+                            onPressed: () {
+                              final state = _gestureKey.currentState;
+                              if (state != null) {
+                                state.animateNext();
+                              } else {
+                                feed.next();
+                              }
+                            },
                             icon: const Icon(Icons.skip_next),
                           ),
                           Expanded(
@@ -283,21 +423,14 @@ class FeedScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      Slider(
-                        value: feed.duration.inMilliseconds > 0
-                            ? (feed.position.inMilliseconds /
-                                      feed.duration.inMilliseconds)
-                                  .clamp(0, 1)
-                            : 0,
-                        onChanged: feed.duration == Duration.zero
-                            ? null
-                            : (v) => feed.seekTo(
-                                Duration(
-                                  milliseconds:
-                                      (feed.duration.inMilliseconds * v)
-                                          .round(),
-                                ),
-                              ),
+                      const SizedBox(height: 4),
+                      FeedProgressBar(
+                        position: feed.position,
+                        duration: feed.duration,
+                        onSeek: feed.seekTo,
+                        onScrubStart: feed.startScrub,
+                        onScrub: feed.scrubTo,
+                        onScrubEnd: feed.endScrub,
                       ),
                     ],
                   ),

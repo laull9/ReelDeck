@@ -80,12 +80,37 @@ class SettingsScreen extends StatelessWidget {
             value: settings.showFolder,
             onChanged: (val) => settings.update(showFolder: val),
           ),
+          SwitchListTile(
+            title: const Text('显示随机队列总数与进度'),
+            subtitle: const Text('在顶部栏显示当前位置与总视频数 (如 12 / 158)'),
+            value: settings.showQueueProgress,
+            onChanged: (val) => settings.update(showQueueProgress: val),
+          ),
+          SwitchListTile(
+            title: const Text('显示文件大小'),
+            subtitle: const Text('在视频信息区显示文件大小 (如 45.2 MB)'),
+            value: settings.showFileSize,
+            onChanged: (val) => settings.update(showFileSize: val),
+          ),
+          SwitchListTile(
+            title: const Text('显示视频格式扩展名'),
+            value: settings.showVideoFormat,
+            onChanged: (val) => settings.update(showVideoFormat: val),
+          ),
+
+          _buildSectionHeader('快捷键'),
+          ListTile(
+            title: const Text('快捷键设置'),
+            subtitle: const Text('配置播放控制、翻页与收藏等桌面快捷键'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.pushNamed(context, AppRoutes.shortcuts),
+          ),
 
           _buildSectionHeader('关于'),
           const ListTile(
             title: Text('ReelDeck'),
             subtitle: Text('本地视频随机播放器'),
-            trailing: Text('v0.1.0'),
+            trailing: Text('v0.2.0'),
           ),
         ],
       ),
