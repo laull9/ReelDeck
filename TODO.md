@@ -15,13 +15,13 @@
 ## 设备验收
 
 - [ ] macOS：目录书签重启、重挂载、沙盒回收站和实际画面验收。本次 UI 自动化无法读取应用窗口，返回 cgWindowNotFound，不能替代功能验收。
-- [ ] Windows x64 / ARM64：移动盘盘符变化、系统回收站、硬解与全屏；ARM64 需完整 CI 验证 ANGLE 与 libmpv。
+- [ ] Windows x64 / ARM64：移动盘盘符变化、系统回收站、硬解与全屏；双架构 CI 已通过，实际播放与文件操作仍待设备验收。
 - [ ] Linux x64 / ARM64：deb、rpm 在目标发行版安装，UUID 重挂载、文件管理器与回收站、Wayland / X11 解码。
 - [ ] Android ARM64 / ARMv7 真机：SAF 授权重启、图片 / GIF、H.264 / HEVC、4K、不同分辨率切换、后台 Surface 恢复、CPU、丢帧与内存。
 - [ ] 本机 NDK 28.2.13676358 安装不完整，仍需修复；本地验证使用已安装完整的 27.1.12297006。CI 保持 Flutter 默认版本。
 - [ ] 本机 API 37 模拟器此前出现 libmpv EGL_BAD_ATTRIBUTE（上游 #1343），不能把该模拟器运行当作原生画面通过。
 - [ ] 配置稳定 Android 发布密钥；当前本地 APK 使用测试签名。
-- [ ] GitHub Actions 全矩阵终态及产物校验记录。
+- [x] GitHub Actions 全矩阵终态及产物校验记录，见 [构建验收](docs/verification.md)。
 
 ## 后续设计研究
 

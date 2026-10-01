@@ -20,7 +20,7 @@ DESIGN 中的 V1.1、V1.2 对应本次的第二、第三版。保留 Feed、目�
 
 ## 构建
 
-固定 Flutter 3.47.5。Windows、macOS、Linux 分别产出 x64 与 arm64，Linux 同时生成 deb、rpm；Android 分拆 arm64-v8a、armeabi-v7a APK。每个任务检查二进制架构和包内容，全部成功后才进入 Release。普通分支与 PR 运行分析和测试，手动构建默认只保存 artifacts。
+固定 Flutter 3.47.5。Windows、macOS、Linux 分别产出 x64 与 arm64，Linux 同时生成 deb、rpm；Android 分拆 arm64-v8a、armeabi-v7a APK。每个任务检查二进制架构和包内容，全部成功后才进入 Release。PR 运行分析和测试，main 推送、版本标签和手动任务构建全矩阵。手动构建默认只保存 artifacts。
 
 Windows ARM64 必须配套 ARM64 libmpv、ANGLE 和插件，不能混入 x64 DLL。Linux 依赖系统 libmpv，并在安装包声明依赖。Android 正式发布签名使用仓库 secrets；未配置时只产出标明测试签名的 APK。
 

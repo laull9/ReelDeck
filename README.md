@@ -41,7 +41,7 @@ ReelDeck 直接播放原文件。支持本机目录、移动硬盘和 Android �
 | Linux rpm | `ReelDeck-linux-x64.rpm` | `ReelDeck-linux-arm64.rpm` |
 | Android | ARMv7：`ReelDeck-android-armv7.apk` | `ReelDeck-android-arm64.apk` |
 
-Windows 解压整个目录后运行 `reel_deck.exe`，保留同目录的 DLL 与 `data`。macOS 解压后将 `ReelDeck.app` 拖入应用程序目录；CI 使用本地签名，尚未做 Apple 公证。
+Windows 安装对应架构的 [Microsoft Visual C++ v14 运行库](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)，解压整个目录后运行 `reel_deck.exe`，保留同目录的 DLL 与 `data`。macOS 解压后将 `ReelDeck.app` 拖入应用程序目录；CI 使用本地签名，尚未做 Apple 公证。
 
 Linux 包在 Ubuntu 24.04 编译。deb 面向 Ubuntu 24.04 / Debian 13，rpm 面向具有相应 GTK3、libmpv 和 glibc 依赖的发行版；具体安装兼容性见 [设备验收记录](TODO.md)。
 
@@ -107,6 +107,7 @@ dart run build_runner build --delete-conflicting-outputs
 | [播放维护](docs/playback.md) | 播放器、预加载、首帧和进度恢复 |
 | [构建与发布](docs/releases.md) | CI 矩阵、签名、打包与校验 |
 | [图标资源](assets/icon/README.md) | 母图、平台尺寸与重生成 |
+| [构建验收](docs/verification.md) | 测试、全矩阵构建与产物校验记录 |
 | [TODO](TODO.md) | 尚待设备验证的项目 |
 
 项目图标使用提供的透明 PNG。SVG 文件嵌入同一图像，平台图标由脚本统一生成。第三方 Windows 原生依赖的许可和本地修改说明保存在 [vendor](vendor/media_kit_libs_windows_video/README.md)。
