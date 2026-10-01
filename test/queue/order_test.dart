@@ -37,6 +37,56 @@ void main() {
       }
     }
   });
+  test('大量独立目录与不均衡目录保留全部项，重复只在无法交错时出现', () {
+    final large = <int, Media>{
+      for (var i = 0; i < 20000; i++)
+        i: Media(
+          id: i,
+          sourceId: 1,
+          relativePath: '${i ~/ 2}/$i.mp4',
+          fileName: '$i.mp4',
+          extension: 'mp4',
+          size: 1,
+          modifiedAt: DateTime(2026),
+        ),
+    };
+    final ordered = orderMedia(large.keys.toList(), large, 'smart', Random(4));
+    expect(ordered.length, large.length);
+    expect(ordered.toSet(), large.keys.toSet());
+    expect(
+      List.generate(
+        ordered.length - 1,
+        (i) => ordered[i] ~/ 2 == ordered[i + 1] ~/ 2,
+      ).any((same) => same),
+      isFalse,
+    );
+    final uneven = <int, Media>{
+      for (var i = 0; i < 12; i++)
+        i: Media(
+          id: i,
+          sourceId: 1,
+          relativePath: '${i < 10 ? "large" : "small"}/$i.mp4',
+          fileName: '$i.mp4',
+          extension: 'mp4',
+          size: 1,
+          modifiedAt: DateTime(2026),
+        ),
+    };
+    for (var seed = 0; seed < 20; seed++) {
+      final ids = orderMedia(
+        uneven.keys.toList(),
+        uneven,
+        'smart',
+        Random(seed),
+      );
+      expect(ids.toSet(), uneven.keys.toSet());
+      final repeats = List.generate(
+        ids.length - 1,
+        (i) => (ids[i] < 10) == (ids[i + 1] < 10),
+      ).where((same) => same).length;
+      expect(repeats, 7);
+    }
+  });
   test('删除当前项按剩余位置前进，禁止回跳已播放项', () {
     final queue = QueueEngine()..restore([1, 2, 3, 4], 2);
     queue.reconcile([1, 4]);

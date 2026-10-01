@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:math';
 
 import 'package:path/path.dart' as p;
@@ -35,18 +36,34 @@ List<int> orderMedia(
         '${item.sourceId}:${p.posix.dirname(item.relativePath.replaceAll('\\', '/'))}';
     groups.putIfAbsent(key, () => []).add(id);
   }
+  final available = SplayTreeSet<_MediaGroup>((a, b) {
+    final size = b.ids.length.compareTo(a.ids.length);
+    return size != 0 ? size : a.tie.compareTo(b.tie);
+  });
+  var tie = 0;
+  for (final ids in groups.values) {
+    available.add(_MediaGroup(ids, tie++));
+  }
   final ordered = <int>[];
-  String? previous;
-  while (groups.isNotEmpty) {
-    var candidates = groups.keys.where((key) => key != previous).toList();
-    if (candidates.isEmpty) candidates = groups.keys.toList();
-    // 优先大组，避免末尾积下一个目录；同样大小随机打破平局。
-    fisherYatesShuffle(candidates, random: random);
-    candidates.sort((a, b) => groups[b]!.length.compareTo(groups[a]!.length));
-    final selected = candidates.first;
-    ordered.add(groups[selected]!.removeLast());
-    if (groups[selected]!.isEmpty) groups.remove(selected);
-    previous = selected;
+  _MediaGroup? previous;
+  while (available.isNotEmpty || previous != null) {
+    final selected = available.isEmpty ? previous! : available.first;
+    if (identical(selected, previous)) {
+      previous = null;
+    } else {
+      available.remove(selected);
+    }
+    // 上一目录暂时留在树外，先取别的目录；只有它剩下时允许连续。
+    if (previous != null) available.add(previous);
+    ordered.add(selected.ids.removeLast());
+    previous = selected.ids.isEmpty ? null : selected;
   }
   return ordered;
+}
+
+class _MediaGroup {
+  _MediaGroup(this.ids, this.tie);
+
+  final List<int> ids;
+  final int tie;
 }
