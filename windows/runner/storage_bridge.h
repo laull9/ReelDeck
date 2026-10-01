@@ -21,6 +21,18 @@ inline std::wstring Wide(const std::string& text) {
   MultiByteToWideChar(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), output.data(), length);
   return output;
 }
+inline std::wstring ResolvePath(const std::wstring& locator) {
+  if (locator.rfind(L"\\\\?\\Volume{", 0) != 0) return locator;
+  auto boundary = locator.find(L"}\\");
+  if (boundary == std::wstring::npos) return {};
+  auto volume = locator.substr(0, boundary + 2);
+  DWORD required = 0;
+  GetVolumePathNamesForVolumeNameW(volume.c_str(), nullptr, 0, &required);
+  if (required == 0) return {};
+  std::wstring mounts(required, L'\0');
+  if (!GetVolumePathNamesForVolumeNameW(volume.c_str(), mounts.data(), required, &required) || !mounts[0]) return {};
+  return std::wstring(mounts.c_str()) + locator.substr(boundary + 2);
+}
 inline flutter::EncodableValue Description(const std::wstring& path, const std::wstring& locator) {
   auto end = path.find_last_not_of(L"\\/");
   auto start = path.find_last_of(L"\\/", end);
@@ -65,21 +77,7 @@ inline void Register(flutter::BinaryMessenger* messenger, HWND window) {
       auto value = args->find(flutter::EncodableValue("locator"));
       if (value == args->end() || !std::holds_alternative<std::string>(value->second)) { result->Error("arguments", "目录信息无效"); return; }
       auto locator = Wide(std::get<std::string>(value->second));
-      std::wstring path(locator);
-      if (locator.rfind(L"\\\\?\\Volume{", 0) == 0) {
-        auto boundary = locator.find(L"}\\");
-        if (boundary != std::wstring::npos) {
-          auto volume = locator.substr(0, boundary + 2);
-          DWORD required = 0;
-          GetVolumePathNamesForVolumeNameW(volume.c_str(), nullptr, 0, &required);
-          if (required > 0) {
-            std::wstring mounts(required, L'\0');
-            if (GetVolumePathNamesForVolumeNameW(volume.c_str(), mounts.data(), required, &required) && mounts[0]) {
-              path = std::wstring(mounts.c_str()) + locator.substr(boundary + 2);
-            }
-          }
-        }
-      }
+      auto path = ResolvePath(locator);
       auto attributes = GetFileAttributesW(path.c_str());
       if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) { result->Success(); return; }
       result->Success(Description(path, locator)); return;
@@ -95,7 +93,12 @@ inline void Register(flutter::BinaryMessenger* messenger, HWND window) {
         result->Error("arguments", "文件位置无效"); return;
       }
       auto locator = Wide(std::get<std::string>(location->second));
-      auto path = locator + L"\\" + Wide(std::get<std::string>(relative->second));
+      auto root = ResolvePath(locator);
+      auto attributes = GetFileAttributesW(root.c_str());
+      if (root.empty() || attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) {
+        result->Error("storage", "目录已断开"); return;
+      }
+      auto path = root + L"\\" + Wide(std::get<std::string>(relative->second));
       IShellItem* item = nullptr;
       HRESULT hr = SHCreateItemFromParsingName(path.c_str(), nullptr, IID_PPV_ARGS(&item));
       if (SUCCEEDED(hr) && call.method_name() == "reveal") {

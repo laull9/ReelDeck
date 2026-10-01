@@ -30,6 +30,7 @@ concurrency:
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 env:
   FLUTTER_VERSION: '3.47.5'
+  PYTHONUTF8: '1'
 
 jobs:
   verify:
@@ -104,15 +105,21 @@ jobs:
             $process = Start-Process $installer -ArgumentList "modify --installPath `"$path`" --add Microsoft.VisualStudio.Component.VC.Tools.ARM64 --quiet --norestart" -Wait -PassThru
             if ($process.ExitCode -notin @(0, 3010)) { throw 'ARM64 toolchain installation failed' }
           }
-      - uses: actions/cache@v4
+      - uses: actions/cache/restore@v4
+        id: angle-cache
         if: matrix.arch == 'arm64'
         with:
           path: ~/AppData/Local/vcpkg/archives
-          key: angle-arm64-eb2d3a3279fd019cb7733072d86900d0ad2a1aef
+          key: angle-arm64-release-eb2d3a3279fd019cb7733072d86900d0ad2a1aef
       - name: Build ARM64 ANGLE
         if: matrix.arch == 'arm64'
         shell: pwsh
         run: ./scripts/prepare_windows_arm64.ps1
+      - uses: actions/cache/save@v4
+        if: matrix.arch == 'arm64' && steps.angle-cache.outputs.cache-hit != 'true'
+        with:
+          path: ~/AppData/Local/vcpkg/archives
+          key: angle-arm64-release-eb2d3a3279fd019cb7733072d86900d0ad2a1aef
       - run: flutter pub get --enforce-lockfile
       - run: flutter build windows --release --no-pub
       - name: Verify and package Windows

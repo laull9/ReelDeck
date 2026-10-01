@@ -12,7 +12,7 @@ git -C $VcpkgRoot checkout --detach $commit
 if ($LASTEXITCODE) { throw 'vcpkg checkout failed' }
 & "$VcpkgRoot/bootstrap-vcpkg.bat" -disableMetrics
 if ($LASTEXITCODE) { throw 'vcpkg bootstrap failed' }
-& "$VcpkgRoot/vcpkg.exe" install 'angle:arm64-windows' --disable-metrics
+& "$VcpkgRoot/vcpkg.exe" install 'angle:arm64-windows' --overlay-triplets="$PSScriptRoot/vcpkg-triplets" --disable-metrics
 if ($LASTEXITCODE) { throw 'ANGLE ARM64 build failed' }
 $env:REELDECK_ANGLE_DIR = "$VcpkgRoot/installed/arm64-windows"
 if ($env:GITHUB_ENV) {

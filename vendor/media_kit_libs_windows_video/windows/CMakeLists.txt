@@ -118,6 +118,12 @@ if(FLUTTER_TARGET_PLATFORM STREQUAL "windows-arm64")
   endif()
   file(MAKE_DIRECTORY "${ANGLE_SRC}/include" "${ANGLE_SRC}/lib")
   file(COPY "${ANGLE_INPUT}/include/" DESTINATION "${ANGLE_SRC}/include")
+  # vcpkg EGL registry 不含 ANGLE 专属常量；与同一源码提交保持一致。
+  download_and_verify(
+    "https://raw.githubusercontent.com/google/angle/d9fc4a372074b1079c193c422fc4a180e79b6636/include/EGL/eglext_angle.h"
+    "42fc5ac5c3e7363c9afb380f213f255b"
+    "${ANGLE_SRC}/include/EGL/eglext_angle.h")
+  file(APPEND "${ANGLE_SRC}/include/EGL/eglext.h" "\n#include \"eglext_angle.h\"\n")
   file(COPY "${ANGLE_INPUT}/bin/" DESTINATION "${ANGLE_SRC}")
   configure_file("${ANGLE_INPUT}/lib/libEGL.lib" "${ANGLE_SRC}/lib/libEGL.dll.lib" COPYONLY)
   configure_file("${ANGLE_INPUT}/lib/libGLESv2.lib" "${ANGLE_SRC}/lib/libGLESv2.dll.lib" COPYONLY)
