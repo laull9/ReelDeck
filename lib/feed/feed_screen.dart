@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../app/routes.dart';
+import '../l10n/app_localizations.dart';
 import '../player/media_kit_player.dart';
 import '../player/video_player_widget.dart';
 import '../sources/source_manager.dart';
@@ -59,6 +60,7 @@ class _FeedScreenState extends State<FeedScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final sources = context.watch<SourceManager>();
     final feed = context.watch<FeedController>();
     final settings = feed.settings;
@@ -97,6 +99,7 @@ class _FeedScreenState extends State<FeedScreen> {
               animations: settings.animations,
               doubleTapFavorite: settings.doubleTapFavorite,
               keyboardEnabled: settings.keyboardEnabled,
+              swipeEnabled: feed.currentMediaId != null,
               onNext: feed.next,
               onPrevious: feed.previous,
               onTogglePlayPause: () {
@@ -147,7 +150,7 @@ class _FeedScreenState extends State<FeedScreen> {
                         key: ValueKey(feed.currentMediaId),
                         fit: fit,
                         errorBuilder: (_, error, stack) =>
-                            const Center(child: Text('图片解码失败')),
+                            Center(child: Text(l10n.imageDecodeFailed)),
                       ),
                     ),
                   if (feed.currentPath == null)
@@ -167,19 +170,19 @@ class _FeedScreenState extends State<FeedScreen> {
                             const SizedBox(height: 20),
                             Text(
                               sources.hasSources
-                                  ? '当前范围没有可播放的视频'
-                                  : '选择一个文件夹，开始随机播放',
+                                  ? l10n.noVideosInRange
+                                  : l10n.selectFolderToStart,
                               textAlign: TextAlign.center,
                               style: Theme.of(context).textTheme.titleLarge,
                             ),
-                            const SizedBox(height: 12),
-                            Text(
-                              sources.hasSources
-                                  ? '检查目录开关、隐藏记录，或重新扫描。'
-                                  : '视频留在原位置，收藏与播放记录只保存在本机。',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(color: Colors.white60),
-                            ),
+                            if (sources.hasSources) ...[
+                              const SizedBox(height: 12),
+                              Text(
+                                l10n.checkFoldersOrRescan,
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(color: Colors.white60),
+                              ),
+                            ],
                             const SizedBox(height: 24),
                             FilledButton.icon(
                               onPressed: sources.isScanning
@@ -188,12 +191,12 @@ class _FeedScreenState extends State<FeedScreen> {
                               icon: const Icon(
                                 Icons.create_new_folder_outlined,
                               ),
-                              label: const Text('添加目录'),
+                              label: Text(l10n.addFolder),
                             ),
                             if (sources.hasSources)
                               TextButton(
                                 onPressed: feed.resetHidden,
-                                child: const Text('恢复所有隐藏项'),
+                                child: Text(l10n.restoreHidden),
                               ),
                           ],
                         ),
@@ -220,16 +223,16 @@ class _FeedScreenState extends State<FeedScreen> {
                                   children: [
                                     TextButton(
                                       onPressed: feed.retry,
-                                      child: const Text('重试'),
+                                      child: Text(l10n.retry),
                                     ),
                                     TextButton(
                                       onPressed: feed.next,
-                                      child: const Text('跳过'),
+                                      child: Text(l10n.skip),
                                     ),
                                     TextButton(
                                       onPressed: () =>
                                           _navigate(context, AppRoutes.sources),
-                                      child: const Text('管理目录'),
+                                      child: Text(l10n.manageFolders),
                                     ),
                                   ],
                                 ),
@@ -301,13 +304,13 @@ class _FeedScreenState extends State<FeedScreen> {
                             ),
                           ],
                           IconButton(
-                            tooltip: '管理目录',
+                            tooltip: l10n.manageFolders,
                             icon: const Icon(Icons.folder_open),
                             onPressed: () =>
                                 _navigate(context, AppRoutes.sources),
                           ),
                           IconButton(
-                            tooltip: '设置',
+                            tooltip: l10n.settings,
                             icon: const Icon(Icons.settings),
                             onPressed: () =>
                                 _navigate(context, AppRoutes.settings),

@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../app/routes.dart';
 import '../feed/feed_controller.dart';
 import '../feed/widgets/playback_errors.dart';
+import '../l10n/app_localizations.dart';
 import 'settings.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -12,31 +13,32 @@ class SettingsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('设置')),
+      appBar: AppBar(title: Text(l10n.settings)),
       body: ListView(
         children: [
-          _buildSectionHeader('播放'),
+          _buildSectionHeader(l10n.sectionPlayback),
           SwitchListTile(
-            title: const Text('切换后自动播放'),
+            title: Text(l10n.autoplay),
             value: settings.autoplay,
             onChanged: (val) => settings.update(autoplay: val),
           ),
           SwitchListTile(
-            title: const Text('循环播放队列'),
+            title: Text(l10n.loopQueue),
             value: settings.loopQueue,
             onChanged: (val) => settings.update(loopQueue: val),
           ),
           ListTile(
-            title: const Text('画面适配'),
+            title: Text(l10n.videoFit),
             trailing: DropdownButton<String>(
               value: settings.videoFit,
               underline: const SizedBox(),
-              items: const [
-                DropdownMenuItem(value: 'fit', child: Text('完整显示')),
-                DropdownMenuItem(value: 'fill', child: Text('填满画面')),
-                DropdownMenuItem(value: 'original', child: Text('原始尺寸')),
+              items: [
+                DropdownMenuItem(value: 'fit', child: Text(l10n.fitContain)),
+                DropdownMenuItem(value: 'fill', child: Text(l10n.fitCover)),
+                DropdownMenuItem(value: 'original', child: Text(l10n.fitOriginal)),
               ],
               onChanged: (val) {
                 if (val != null) settings.update(videoFit: val);
@@ -44,12 +46,12 @@ class SettingsScreen extends StatelessWidget {
             ),
           ),
           SwitchListTile(
-            title: const Text('记住播放位置'),
+            title: Text(l10n.rememberPosition),
             value: settings.rememberPosition,
             onChanged: (val) => settings.update(rememberPosition: val),
           ),
           ListTile(
-            title: const Text('默认音量'),
+            title: Text(l10n.defaultVolume),
             subtitle: Slider(
               value: settings.defaultVolume,
               min: 0.0,
@@ -59,35 +61,58 @@ class SettingsScreen extends StatelessWidget {
             trailing: Text('${(settings.defaultVolume * 100).round()}%'),
           ),
 
-          _buildSectionHeader('队列'),
+          _buildSectionHeader(l10n.decoderSection),
           ListTile(
-            title: const Text('播放顺序'),
-            subtitle: const Text('智能随机尽量交错目录；时间顺序按文件修改时间'),
+            title: Text(l10n.decoderMode),
+            trailing: DropdownButton<String>(
+              value: settings.decoderMode,
+              underline: const SizedBox(),
+              items: [
+                DropdownMenuItem(value: 'auto', child: Text(l10n.decoderAuto)),
+                DropdownMenuItem(
+                  value: 'auto-safe',
+                  child: Text(l10n.decoderAutoSafe),
+                ),
+                DropdownMenuItem(
+                  value: 'no',
+                  child: Text(l10n.decoderSoftware),
+                ),
+              ],
+              onChanged: (val) {
+                if (val != null) settings.update(decoderMode: val);
+              },
+            ),
+          ),
+
+          _buildSectionHeader(l10n.sectionQueue),
+          ListTile(
+            title: Text(l10n.queueOrder),
+            subtitle: Text(l10n.queueOrderDesc),
             trailing: DropdownButton<String>(
               value: settings.queueOrder,
-              items: const [
-                DropdownMenuItem(value: 'shuffle', child: Text('纯随机')),
-                DropdownMenuItem(value: 'smart', child: Text('智能随机')),
-                DropdownMenuItem(value: 'newest', child: Text('最新优先')),
-                DropdownMenuItem(value: 'oldest', child: Text('最旧优先')),
+              items: [
+                DropdownMenuItem(value: 'shuffle', child: Text(l10n.orderShuffle)),
+                DropdownMenuItem(value: 'smart', child: Text(l10n.orderSmart)),
+                DropdownMenuItem(value: 'newest', child: Text(l10n.orderNewest)),
+                DropdownMenuItem(value: 'oldest', child: Text(l10n.orderOldest)),
               ],
               onChanged: (value) => settings.update(queueOrder: value),
             ),
           ),
           SwitchListTile(
-            title: const Text('每轮结束重新随机'),
-            subtitle: const Text('关闭后重复当前顺序，时间排序始终保持顺序'),
+            title: Text(l10n.reshuffleAfterRound),
+            subtitle: Text(l10n.reshuffleDesc),
             value: settings.reshuffleAfterRound,
             onChanged: (value) => settings.update(reshuffleAfterRound: value),
           ),
           SwitchListTile(
-            title: const Text('播放图片与 GIF'),
-            subtitle: const Text('支持 JPG、PNG、WebP、BMP、GIF；刷新目录后加入索引'),
+            title: Text(l10n.includeImages),
+            subtitle: Text(l10n.includeImagesDesc),
             value: settings.includeImages,
             onChanged: (value) => settings.update(includeImages: value),
           ),
           ListTile(
-            title: const Text('图片停留时间'),
+            title: Text(l10n.imageSeconds),
             subtitle: Slider(
               value: settings.imageSeconds.toDouble().clamp(1, 60),
               min: 1,
@@ -96,110 +121,134 @@ class SettingsScreen extends StatelessWidget {
               onChanged: (value) =>
                   settings.update(imageSeconds: value.round()),
             ),
-            trailing: Text('${settings.imageSeconds} 秒'),
+            trailing: Text('${settings.imageSeconds} ${l10n.secondsUnit}'),
           ),
-          _buildSectionHeader('目录'),
+
+          _buildSectionHeader(l10n.sectionSources),
           ListTile(
-            title: const Text('管理视频目录'),
+            title: Text(l10n.manageVideoSources),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.pushNamed(context, AppRoutes.sources),
           ),
           SwitchListTile(
-            title: const Text('新目录默认扫描子目录'),
+            title: Text(l10n.recursiveScan),
             value: settings.recursiveScan,
             onChanged: (val) => settings.update(recursiveScan: val),
           ),
-
           SwitchListTile(
-            title: const Text('预加载下一条视频'),
-            subtitle: const Text('桌面最多两个播放器；Android 保持单解码器'),
+            title: Text(l10n.preloadVideos),
+            subtitle: Text(l10n.preloadVideosDesc),
             value: settings.preloadNext,
             onChanged: (value) => settings.update(preloadNext: value),
           ),
           SwitchListTile(
-            title: const Text('外置机械硬盘优化'),
-            subtitle: const Text('等当前视频准备完成后再预加载，减少同时读取'),
+            title: Text(l10n.externalDriveOptimization),
+            subtitle: Text(l10n.externalDriveDesc),
             value: settings.externalDriveOptimization,
             onChanged: (value) =>
                 settings.update(externalDriveOptimization: value),
           ),
-          _buildSectionHeader('显示'),
+
+          _buildSectionHeader(l10n.sectionDisplay),
           ListTile(
-            title: const Text('浮层模式'),
-            subtitle: const Text('轻触或移动鼠标唤出控制'),
+            title: Text(l10n.overlayMode),
+            subtitle: Text(l10n.overlayModeDesc),
             trailing: DropdownButton<String>(
               value: settings.overlayMode,
-              items: const [
-                DropdownMenuItem(value: 'full', child: Text('完整信息')),
-                DropdownMenuItem(value: 'progress', child: Text('仅进度')),
-                DropdownMenuItem(value: 'none', child: Text('无浮层')),
+              items: [
+                DropdownMenuItem(value: 'full', child: Text(l10n.overlayFull)),
+                DropdownMenuItem(value: 'progress', child: Text(l10n.overlayProgress)),
+                DropdownMenuItem(value: 'none', child: Text(l10n.overlayNone)),
               ],
               onChanged: (value) => settings.update(overlayMode: value),
             ),
           ),
           SwitchListTile(
-            title: const Text('切换动画'),
+            title: Text(l10n.animations),
             value: settings.animations,
             onChanged: (value) => settings.update(animations: value),
           ),
           SwitchListTile(
-            title: const Text('双击收藏'),
+            title: Text(l10n.doubleTapFavorite),
             value: settings.doubleTapFavorite,
             onChanged: (value) => settings.update(doubleTapFavorite: value),
           ),
           SwitchListTile(
-            title: const Text('显示文件名'),
+            title: Text(l10n.showFilename),
             value: settings.showFilename,
             onChanged: (val) => settings.update(showFilename: val),
           ),
           SwitchListTile(
-            title: const Text('显示目录'),
+            title: Text(l10n.showFolder),
             value: settings.showFolder,
             onChanged: (val) => settings.update(showFolder: val),
           ),
           SwitchListTile(
-            title: const Text('显示随机队列总数与进度'),
-            subtitle: const Text('在顶部栏显示当前位置与总视频数 (如 12 / 158)'),
+            title: Text(l10n.showQueueProgress),
+            subtitle: Text(l10n.showQueueProgressDesc),
             value: settings.showQueueProgress,
             onChanged: (val) => settings.update(showQueueProgress: val),
           ),
           SwitchListTile(
-            title: const Text('显示文件大小'),
-            subtitle: const Text('在视频信息区显示文件大小 (如 45.2 MB)'),
+            title: Text(l10n.showFileSize),
+            subtitle: Text(l10n.showFileSizeDesc),
             value: settings.showFileSize,
             onChanged: (val) => settings.update(showFileSize: val),
           ),
           SwitchListTile(
-            title: const Text('显示视频格式扩展名'),
+            title: Text(l10n.showVideoFormat),
             value: settings.showVideoFormat,
             onChanged: (val) => settings.update(showVideoFormat: val),
           ),
 
-          _buildSectionHeader('快捷键'),
+          _buildSectionHeader(l10n.sectionShortcuts),
           SwitchListTile(
-            title: const Text('启用键盘快捷键'),
+            title: Text(l10n.enableShortcuts),
             value: settings.keyboardEnabled,
             onChanged: (value) => settings.update(keyboardEnabled: value),
           ),
           ListTile(
-            title: const Text('快捷键设置'),
-            subtitle: const Text('配置播放控制、翻页与收藏等桌面快捷键'),
+            title: Text(l10n.shortcutsSettings),
+            subtitle: Text(l10n.shortcutsSettingsDesc),
             trailing: const Icon(Icons.chevron_right),
             onTap: () => Navigator.pushNamed(context, AppRoutes.shortcuts),
           ),
 
+          _buildSectionHeader(l10n.sectionLanguage),
           ListTile(
-            title: const Text('播放错误记录'),
-            subtitle: const Text('本机保留最近 100 条'),
+            title: Text(l10n.language),
+            trailing: DropdownButton<String>(
+              value: settings.locale,
+              underline: const SizedBox(),
+              items: [
+                DropdownMenuItem(
+                  value: 'system',
+                  child: Text(l10n.languageSystem),
+                ),
+                const DropdownMenuItem(value: 'en', child: Text('English')),
+                const DropdownMenuItem(value: 'zh', child: Text('简体中文')),
+                const DropdownMenuItem(value: 'ja', child: Text('日本語')),
+                const DropdownMenuItem(value: 'es', child: Text('Español')),
+                const DropdownMenuItem(value: 'fr', child: Text('Français')),
+              ],
+              onChanged: (val) {
+                if (val != null) settings.update(locale: val);
+              },
+            ),
+          ),
+
+          ListTile(
+            title: Text(l10n.playbackErrors),
+            subtitle: const Text('100'),
             onTap: () =>
                 showPlaybackErrors(context, context.read<FeedController>()),
           ),
           if (settings.error != null) ListTile(title: Text(settings.error!)),
-          _buildSectionHeader('关于'),
-          const ListTile(
-            title: Text('ReelDeck'),
-            subtitle: Text('本地视频随机播放器'),
-            trailing: Text('v0.3.0'),
+          _buildSectionHeader(l10n.sectionAbout),
+          ListTile(
+            title: const Text('ReelDeck'),
+            subtitle: Text(l10n.appDescription),
+            trailing: const Text('v0.3.0'),
           ),
         ],
       ),

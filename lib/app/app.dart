@@ -1,12 +1,14 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../database/database.dart';
 import '../database/library_store.dart';
+import '../l10n/app_localizations.dart';
 import '../settings/settings.dart';
 import '../sources/source_manager.dart';
 import '../feed/feed_controller.dart';
@@ -89,45 +91,56 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
       ChangeNotifierProvider.value(value: sources),
       ChangeNotifierProvider.value(value: feed),
     ],
-    child: MaterialApp(
-      title: 'ReelDeck',
-      debugShowCheckedModeBanner: false,
-      theme: AppTheme.dark(),
-      home: FutureBuilder<void>(
-        future: _startup,
-        builder: (context, snapshot) {
-          if (snapshot.hasError) {
-            return Scaffold(
-              body: Center(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Text('应用初始化失败'),
-                    SelectableText('${snapshot.error}'),
-                  ],
+    child: ListenableBuilder(
+      listenable: settings,
+      builder: (context, _) => MaterialApp(
+        title: 'ReelDeck',
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.dark(),
+        locale: settings.locale == 'system' ? null : Locale(settings.locale),
+        supportedLocales: AppLocalizations.supportedLocales,
+        localizationsDelegates: const [
+          AppLocalizations.delegate,
+          GlobalMaterialLocalizations.delegate,
+          GlobalWidgetsLocalizations.delegate,
+          GlobalCupertinoLocalizations.delegate,
+        ],
+        home: FutureBuilder<void>(
+          future: _startup,
+          builder: (context, snapshot) {
+            if (snapshot.hasError) {
+              return Scaffold(
+                body: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('应用初始化失败'),
+                      SelectableText('${snapshot.error}'),
+                    ],
+                  ),
                 ),
+              );
+            }
+            // 原生首帧需要 Texture 已挂载；等待 initialize 时也保留 Feed。
+            return AbsorbPointer(
+              absorbing: snapshot.connectionState != ConnectionState.done,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  const FeedScreen(),
+                  if (snapshot.connectionState != ConnectionState.done)
+                    const Center(child: CircularProgressIndicator()),
+                ],
               ),
             );
-          }
-          // 原生首帧需要 Texture 已挂载；等待 initialize 时也保留 Feed。
-          return AbsorbPointer(
-            absorbing: snapshot.connectionState != ConnectionState.done,
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                const FeedScreen(),
-                if (snapshot.connectionState != ConnectionState.done)
-                  const Center(child: CircularProgressIndicator()),
-              ],
-            ),
-          );
+          },
+        ),
+        routes: {
+          AppRoutes.settings: (_) => const SettingsScreen(),
+          AppRoutes.sources: (_) => const SourcesScreen(),
+          AppRoutes.shortcuts: (_) => const ShortcutsScreen(),
         },
       ),
-      routes: {
-        AppRoutes.settings: (_) => const SettingsScreen(),
-        AppRoutes.sources: (_) => const SourcesScreen(),
-        AppRoutes.shortcuts: (_) => const ShortcutsScreen(),
-      },
     ),
   );
 }

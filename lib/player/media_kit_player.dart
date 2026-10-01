@@ -20,19 +20,35 @@ class MediaKitPlayerService implements PlayerService {
 
   VideoController get controller => _controller;
 
-  MediaKitPlayerService() {
+  MediaKitPlayerService({String decoderMode = 'auto'}) {
     _player = Player(
       configuration: PlayerConfiguration(
-        bufferSize: Platform.isAndroid ? 8 * 1024 * 1024 : 32 * 1024 * 1024,
+        bufferSize: Platform.isAndroid ? 16 * 1024 * 1024 : 64 * 1024 * 1024,
       ),
     );
+    final hwdec = decoderMode == 'no'
+        ? 'no'
+        : (Platform.isAndroid
+            ? (decoderMode == 'auto-safe' ? 'auto-safe' : 'mediacodec')
+            : (decoderMode == 'auto-safe' ? 'auto-safe' : 'auto'));
     _controller = VideoController(
       _player,
-      // 使用库的安全硬解选择，保留模拟器和不支持编码的回退路径。
-      configuration: const VideoControllerConfiguration(
-        enableHardwareAcceleration: true,
+      configuration: VideoControllerConfiguration(
+        enableHardwareAcceleration: decoderMode != 'no',
+        hwdec: hwdec,
       ),
     );
+    _tunePerformance();
+  }
+
+  void _tunePerformance() {
+    if (_player.platform case final NativePlayer native) {
+      native.setProperty('hr-seek', 'no');
+      native.setProperty('vd-lavc-fast', 'yes');
+      native.setProperty('vd-lavc-threads', '0');
+      native.setProperty('demuxer-lavf-probesize', '1048576');
+      native.setProperty('demuxer-lavf-analyzeduration', '1.0');
+    }
   }
 
   Future<void> setDriveOptimization(bool enabled) async {

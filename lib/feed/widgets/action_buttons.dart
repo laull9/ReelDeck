@@ -1,12 +1,11 @@
-import 'package:flutter/material.dart';
-
-import '../feed_controller.dart';
-
 import 'dart:io';
 
-import 'playback_errors.dart';
-
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+
+import '../../l10n/app_localizations.dart';
+import '../feed_controller.dart';
+import 'playback_errors.dart';
 
 class ActionButtons extends StatelessWidget {
   final bool visible;
@@ -14,6 +13,7 @@ class ActionButtons extends StatelessWidget {
   const ActionButtons({super.key, required this.visible});
 
   void _showMoreMenu(BuildContext context, FeedController controller) {
+    final l10n = AppLocalizations.of(context);
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -27,7 +27,7 @@ class ActionButtons extends StatelessWidget {
               children: [
                 ListTile(
                   leading: const Icon(Icons.folder_open),
-                  title: const Text('只播放所在目录'),
+                  title: Text(l10n.playFolderOnly),
                   onTap: () {
                     final media = controller.currentMedia;
                     Navigator.pop(context);
@@ -38,9 +38,9 @@ class ActionButtons extends StatelessWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.launch),
-                  title: const Text('在文件管理器中显示'),
+                  title: Text(l10n.showInFileManager),
                   subtitle: Platform.isAndroid
-                      ? const Text('SAF 文件由授权的文档提供方管理')
+                      ? Text(l10n.safNotice)
                       : null,
                   enabled: !Platform.isAndroid,
                   onTap: () {
@@ -50,9 +50,9 @@ class ActionButtons extends StatelessWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.delete_outline),
-                  title: const Text('移入回收站'),
+                  title: Text(l10n.moveToTrash),
                   subtitle: Platform.isAndroid
-                      ? const Text('Android 文档授权不提供统一回收站，请使用隐藏')
+                      ? Text(l10n.androidTrashNotice)
                       : null,
                   enabled: !Platform.isAndroid,
                   onTap: () async {
@@ -62,16 +62,16 @@ class ActionButtons extends StatelessWidget {
                     final confirmed = await showDialog<bool>(
                       context: context,
                       builder: (context) => AlertDialog(
-                        title: const Text('移入系统回收站？'),
+                        title: Text(l10n.confirmMoveToTrash),
                         content: Text(media.fileName),
                         actions: [
                           TextButton(
                             onPressed: () => Navigator.pop(context, false),
-                            child: const Text('取消'),
+                            child: Text(l10n.cancel),
                           ),
                           FilledButton(
                             onPressed: () => Navigator.pop(context, true),
-                            child: const Text('移入回收站'),
+                            child: Text(l10n.moveToTrash),
                           ),
                         ],
                       ),
@@ -88,9 +88,9 @@ class ActionButtons extends StatelessWidget {
                     Icons.visibility_off,
                     color: Colors.white,
                   ),
-                  title: const Text(
-                    '隐藏视频',
-                    style: TextStyle(color: Colors.white),
+                  title: Text(
+                    l10n.hideVideo,
+                    style: const TextStyle(color: Colors.white),
                   ),
                   onTap: () {
                     controller.hideCurrentVideo();
@@ -99,9 +99,9 @@ class ActionButtons extends StatelessWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.folder_off, color: Colors.white),
-                  title: const Text(
-                    '隐藏所在目录（含子目录）',
-                    style: TextStyle(color: Colors.white),
+                  title: Text(
+                    l10n.hideFolder,
+                    style: const TextStyle(color: Colors.white),
                   ),
                   onTap: () {
                     controller.hideCurrentFolder();
@@ -110,9 +110,9 @@ class ActionButtons extends StatelessWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.aspect_ratio, color: Colors.white),
-                  title: const Text(
-                    '切换画面适配',
-                    style: TextStyle(color: Colors.white),
+                  title: Text(
+                    l10n.videoFit,
+                    style: const TextStyle(color: Colors.white),
                   ),
                   onTap: () {
                     controller.cycleVideoFit();
@@ -121,7 +121,7 @@ class ActionButtons extends StatelessWidget {
                 ),
                 ListTile(
                   leading: const Icon(Icons.error_outline),
-                  title: const Text('播放错误记录'),
+                  title: Text(l10n.playbackErrors),
                   onTap: () {
                     final parent = Navigator.of(context).context;
                     Navigator.pop(context);
@@ -138,6 +138,7 @@ class ActionButtons extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return IgnorePointer(
       ignoring: !visible,
       child: AnimatedOpacity(
@@ -151,7 +152,7 @@ class ActionButtons extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 IconButton(
-                  tooltip: controller.isFavorite ? '取消收藏' : '收藏',
+                  tooltip: l10n.favorites,
                   icon: Icon(
                     controller.isFavorite
                         ? Icons.favorite
@@ -163,7 +164,7 @@ class ActionButtons extends StatelessWidget {
                 ),
                 const SizedBox(height: 16),
                 IconButton(
-                  tooltip: '更多操作',
+                  tooltip: l10n.moreActions,
                   icon: const Icon(
                     Icons.more_horiz,
                     color: Colors.white,

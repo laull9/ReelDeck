@@ -115,44 +115,72 @@ extension FeedPlayback on FeedController {
     imageBytes = null;
     _scrubTarget = null;
     await _scrubSeek;
-    busy = true;
     error = null;
-    _path = null;
-    _openedMediaId = null;
-    _playing = false;
-    _completed = false;
-    position = duration = Duration.zero;
-    _positionSaved = _positionNotified = -1;
-    _notify();
+
+    final media = currentMedia;
+    if (media == null) {
+      busy = false;
+      _path = null;
+      _openedMediaId = null;
+      _playing = false;
+      _completed = false;
+      position = duration = Duration.zero;
+      _positionSaved = _positionNotified = -1;
+      _notify();
+      await _unbind();
+      await player?.pause();
+      await _saveSession();
+      return;
+    }
+
+    final resolved = await sourceManager?.resolveMediaPath(media);
+    if (resolved == null) {
+      await _recover('视频或目录无法访问，请连接磁盘后重试，或重新授权目录。');
+      return;
+    }
+
+    final start = await _resumePosition(media.id);
+    final isPreloadedNext = !isImage && pool.hasPreloadedNext(resolved, start);
+    final isPreloadedPrev =
+        !isImage && pool.hasPreloadedPrevious(resolved, start);
+    final isPreloaded = isPreloadedNext || isPreloadedPrev;
+
+    if (!isPreloaded) {
+      busy = true;
+      _path = null;
+      _openedMediaId = null;
+      _playing = false;
+      _completed = false;
+      position = duration = Duration.zero;
+      _positionSaved = _positionNotified = -1;
+      _notify();
+    }
+
     await _unbind();
     await player?.pause();
+
     try {
-      final media = currentMedia;
-      if (media == null) {
-        await _saveSession();
-        return;
-      }
-      final resolved = await sourceManager?.resolveMediaPath(media);
-      if (resolved == null) {
-        await _recover('视频或目录无法访问，请连接磁盘后重试，或重新授权目录。');
-        return;
-      }
       if (player is MediaKitPlayerService) {
         await (player as MediaKitPlayerService).setDriveOptimization(
           settings.externalDriveOptimization,
         );
       }
-      final start = await _resumePosition(media.id);
       if (isImage) {
         await _openImage(media, resolved, start);
-      } else if (pool.hasPreloaded(resolved, start)) {
-        await pool.swap();
+      } else if (isPreloadedNext) {
+        await pool.swapToNext();
+      } else if (isPreloadedPrev) {
+        await pool.swapToPrevious();
       } else {
         await player?.open(resolved, start: start);
       }
       _path = resolved;
       _openedMediaId = media.id;
       if (imageBytes == null) {
+        if (!settings.rememberPosition &&
+            (player?.position ?? Duration.zero) > Duration.zero) {
+          await player?.seekTo(Duration.zero);
+        }
         position = player?.position ?? start;
         duration = player?.duration ?? Duration.zero;
         _positionSaved = position.inSeconds ~/ 5;
@@ -172,7 +200,11 @@ extension FeedPlayback on FeedController {
       busy = false;
       _notify();
     }
-    // 当前画面已交接再预加载；Android 只保留一个解码器。
+
+    _preloadNeighbors();
+  }
+
+  void _preloadNeighbors() {
     if (!pool.preloadEnabled ||
         !settings.preloadNext ||
         isImage ||
@@ -180,22 +212,38 @@ extension FeedPlayback on FeedController {
       return;
     }
     final next = _media[queue.nextId];
-    if (next == null ||
-        SourceScanner.imageExtensions.contains(next.extension)) {
-      return;
+    if (next != null &&
+        !SourceScanner.imageExtensions.contains(next.extension)) {
+      unawaited(() async {
+        try {
+          final nextPath = await sourceManager?.resolveMediaPath(next);
+          if (nextPath != null) {
+            if (pool.nextPlayer is MediaKitPlayerService) {
+              await (pool.nextPlayer as MediaKitPlayerService)
+                  .setDriveOptimization(settings.externalDriveOptimization);
+            }
+            final nextStart = await _resumePosition(next.id);
+            await pool.preloadNext(nextPath, start: nextStart);
+          }
+        } catch (_) {}
+      }());
     }
-    try {
-      final nextPath = await sourceManager?.resolveMediaPath(next);
-      if (nextPath != null) {
-        if (pool.nextPlayer is MediaKitPlayerService) {
-          await (pool.nextPlayer as MediaKitPlayerService).setDriveOptimization(
-            settings.externalDriveOptimization,
-          );
-        }
-        await pool.preloadNext(nextPath, start: await _resumePosition(next.id));
-      }
-    } catch (_) {
-      // 预加载失败时，切换后走普通打开流程。
+    final prev = _media[queue.previousId];
+    if (prev != null &&
+        !SourceScanner.imageExtensions.contains(prev.extension)) {
+      unawaited(() async {
+        try {
+          final prevPath = await sourceManager?.resolveMediaPath(prev);
+          if (prevPath != null) {
+            if (pool.previousPlayer is MediaKitPlayerService) {
+              await (pool.previousPlayer as MediaKitPlayerService)
+                  .setDriveOptimization(settings.externalDriveOptimization);
+            }
+            final prevStart = await _resumePosition(prev.id);
+            await pool.preloadPrevious(prevPath, start: prevStart);
+          }
+        } catch (_) {}
+      }());
     }
   }
 }

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../feed/feed_controller.dart';
+import '../l10n/app_localizations.dart';
 import 'source_manager.dart';
 
 class SourcesScreen extends StatelessWidget {
@@ -9,12 +10,13 @@ class SourcesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final manager = context.watch<SourceManager>();
+    final l10n = AppLocalizations.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('视频目录'),
+        title: Text(l10n.videoSources),
         actions: [
           IconButton(
-            tooltip: '重新扫描',
+            tooltip: l10n.rescan,
             onPressed: manager.isScanning ? null : manager.rescanAll,
             icon: const Icon(Icons.refresh),
           ),
@@ -33,7 +35,7 @@ class SourcesScreen extends StatelessWidget {
             ),
           Expanded(
             child: manager.sources.isEmpty
-                ? const Center(child: Text('添加本地目录或外置硬盘目录'))
+                ? Center(child: Text(l10n.emptySourcesHint))
                 : ListView(
                     children: [
                       ...manager.sources.map(
@@ -46,7 +48,7 @@ class SourcesScreen extends StatelessWidget {
                           ),
                           title: Text(source.name),
                           subtitle: Text(
-                            '${source.lastKnownPath}\n${manager.allMedia.where((m) => m.sourceId == source.id).length} 个媒体',
+                            '${source.lastKnownPath}\n${manager.allMedia.where((m) => m.sourceId == source.id).length} ${l10n.items}',
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -72,20 +74,22 @@ class SourcesScreen extends StatelessWidget {
                                 final confirmed = await showDialog<bool>(
                                   context: context,
                                   builder: (context) => AlertDialog(
-                                    title: Text('移除 ${source.name}？'),
-                                    content: const Text(
-                                      '清除该目录的索引、收藏和隐藏记录。原视频文件保持不变。',
+                                    title: Text(
+                                      '${l10n.remove} ${source.name}?',
+                                    ),
+                                    content: Text(
+                                      l10n.confirmRemoveSource,
                                     ),
                                     actions: [
                                       TextButton(
                                         onPressed: () =>
                                             Navigator.pop(context, false),
-                                        child: const Text('取消'),
+                                        child: Text(l10n.cancel),
                                       ),
                                       TextButton(
                                         onPressed: () =>
                                             Navigator.pop(context, true),
-                                        child: const Text('移除'),
+                                        child: Text(l10n.remove),
                                       ),
                                     ],
                                   ),
@@ -98,18 +102,15 @@ class SourcesScreen extends StatelessWidget {
                             itemBuilder: (_) => [
                               PopupMenuItem(
                                 value: 'recursive',
-                                child: Text(
-                                  source.recursive ? '关闭子目录扫描' : '开启子目录扫描',
-                                ),
+                                child: Text(l10n.includeSubfolders),
                               ),
-                              PopupMenuItem(value: 'scan', child: Text('重新扫描')),
                               PopupMenuItem(
-                                value: 'authorize',
-                                child: Text('重新授权 / 迁移目录'),
+                                value: 'scan',
+                                child: Text(l10n.rescan),
                               ),
                               PopupMenuItem(
                                 value: 'remove',
-                                child: Text('移除目录'),
+                                child: Text(l10n.remove),
                               ),
                             ],
                           ),
@@ -117,8 +118,7 @@ class SourcesScreen extends StatelessWidget {
                       ),
                       ListTile(
                         leading: const Icon(Icons.visibility),
-                        title: const Text('恢复所有隐藏项'),
-                        subtitle: const Text('包含单个视频和目录规则'),
+                        title: Text(l10n.restoreHidden),
                         onTap: () =>
                             context.read<FeedController>().resetHidden(),
                       ),
@@ -130,7 +130,7 @@ class SourcesScreen extends StatelessWidget {
       floatingActionButton: FloatingActionButton.extended(
         onPressed: manager.isScanning ? null : manager.pickAndAddFolder,
         icon: const Icon(Icons.add),
-        label: const Text('添加目录'),
+        label: Text(l10n.addFolder),
       ),
     );
   }

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../feed_controller.dart';
 import 'formatters.dart';
 import 'progress_bar.dart';
@@ -24,6 +25,7 @@ class FeedControls extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final settings = feed.settings;
     return DecoratedBox(
       decoration: const BoxDecoration(
@@ -81,19 +83,19 @@ class FeedControls extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     IconButton(
-                      tooltip: '上一条',
+                      tooltip: l10n.previous,
                       onPressed: previous,
                       icon: const Icon(Icons.skip_previous),
                     ),
                     IconButton(
-                      tooltip: feed.isPlaying ? '暂停' : '播放',
+                      tooltip: feed.isPlaying ? l10n.pause : l10n.play,
                       onPressed: feed.togglePlayPause,
                       icon: Icon(
                         feed.isPlaying ? Icons.pause : Icons.play_arrow,
                       ),
                     ),
                     IconButton(
-                      tooltip: '下一条',
+                      tooltip: l10n.next,
                       onPressed: next,
                       icon: const Icon(Icons.skip_next),
                     ),
@@ -104,7 +106,9 @@ class FeedControls extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: '全屏',
+                      tooltip: feed.fullscreen
+                          ? l10n.exitFullscreen
+                          : l10n.fullscreen,
                       onPressed: feed.toggleFullscreen,
                       icon: Icon(
                         feed.fullscreen
@@ -113,12 +117,12 @@ class FeedControls extends StatelessWidget {
                       ),
                     ),
                     IconButton(
-                      tooltip: '重新排列队列',
+                      tooltip: l10n.reshuffle,
                       onPressed: feed.reshuffle,
                       icon: const Icon(Icons.shuffle),
                     ),
                     IconButton(
-                      tooltip: '静音',
+                      tooltip: feed.muted ? l10n.unmute : l10n.mute,
                       onPressed: feed.toggleMute,
                       icon: Icon(
                         feed.muted ? Icons.volume_off : Icons.volume_up,

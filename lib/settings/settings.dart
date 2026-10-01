@@ -33,6 +33,8 @@ class AppSettings extends ChangeNotifier {
   bool showFileSize = true;
   bool showQueueProgress = true;
   bool showVideoFormat = true;
+  String locale = 'system';
+  String decoderMode = 'auto';
   Map<ShortcutAction, List<ShortcutBinding>> shortcuts =
       ShortcutAction.createDefaultMap();
 
@@ -74,6 +76,14 @@ class AppSettings extends ChangeNotifier {
       showFileSize = data['showFileSize'] as bool? ?? true;
       showQueueProgress = data['showQueueProgress'] as bool? ?? true;
       showVideoFormat = data['showVideoFormat'] as bool? ?? true;
+      locale = data['locale'] as String? ?? 'system';
+      if (!['system', 'en', 'zh', 'ja', 'es', 'fr'].contains(locale)) {
+        locale = 'system';
+      }
+      decoderMode = data['decoderMode'] as String? ?? 'auto';
+      if (!['auto', 'auto-safe', 'no'].contains(decoderMode)) {
+        decoderMode = 'auto';
+      }
 
       if (data['shortcuts'] is Map<String, dynamic>) {
         final map = data['shortcuts'] as Map<String, dynamic>;
@@ -126,6 +136,8 @@ class AppSettings extends ChangeNotifier {
       'showFileSize': showFileSize,
       'showQueueProgress': showQueueProgress,
       'showVideoFormat': showVideoFormat,
+      'locale': locale,
+      'decoderMode': decoderMode,
       'shortcuts': shortcuts.map(
         (k, v) => MapEntry(k.name, v.map((b) => b.toJson()).toList()),
       ),
@@ -163,6 +175,8 @@ class AppSettings extends ChangeNotifier {
     bool? showFileSize,
     bool? showQueueProgress,
     bool? showVideoFormat,
+    String? locale,
+    String? decoderMode,
   }) {
     if (autoplay != null) this.autoplay = autoplay;
     if (queueOrder != null &&
@@ -195,6 +209,14 @@ class AppSettings extends ChangeNotifier {
     if (showFileSize != null) this.showFileSize = showFileSize;
     if (showQueueProgress != null) this.showQueueProgress = showQueueProgress;
     if (showVideoFormat != null) this.showVideoFormat = showVideoFormat;
+    if (locale != null &&
+        ['system', 'en', 'zh', 'ja', 'es', 'fr'].contains(locale)) {
+      this.locale = locale;
+    }
+    if (decoderMode != null &&
+        ['auto', 'auto-safe', 'no'].contains(decoderMode)) {
+      this.decoderMode = decoderMode;
+    }
     _save();
     notifyListeners();
   }

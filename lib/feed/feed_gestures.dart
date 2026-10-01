@@ -12,6 +12,7 @@ class FeedGestureHandler extends StatefulWidget {
   final bool animations;
   final bool doubleTapFavorite;
   final bool keyboardEnabled;
+  final bool swipeEnabled;
   final Widget? topOverlay;
   final Widget? bottomOverlay;
   final FutureOr<void> Function() onNext;
@@ -38,6 +39,7 @@ class FeedGestureHandler extends StatefulWidget {
     this.animations = true,
     this.doubleTapFavorite = true,
     this.keyboardEnabled = true,
+    this.swipeEnabled = true,
     this.topOverlay,
     this.bottomOverlay,
     required this.onNext,
@@ -128,10 +130,9 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
   }
 
   Future<void> _switch(bool next) async {
-    if (_switching || _isAnimating) return;
+    if (!widget.swipeEnabled || _switching || _isAnimating) return;
     _switching = true;
     try {
-      // 只移动旧画面。打开回调包含后台预加载，不能在它结束后再移动新视频。
       if (widget.animations) {
         await _animateSlide(
           _dragOffset,
@@ -139,21 +140,26 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
         );
       }
       if (!mounted) return;
+      final result = next ? widget.onNext() : widget.onPrevious();
       setState(() {
         _dragOffset = 0;
       });
-      final result = next ? widget.onNext() : widget.onPrevious();
       if (result is Future<void>) await result;
     } finally {
       _switching = false;
     }
   }
 
-  void animateNext([double? height]) => unawaited(_switch(true));
-  void animatePrevious([double? height]) => unawaited(_switch(false));
+  void animateNext([double? height]) {
+    if (widget.swipeEnabled) unawaited(_switch(true));
+  }
+
+  void animatePrevious([double? height]) {
+    if (widget.swipeEnabled) unawaited(_switch(false));
+  }
 
   void _handleScroll(PointerScrollEvent event, double height) {
-    if (_isAnimating || _switching) return;
+    if (!widget.swipeEnabled || _isAnimating || _switching) return;
     final now = DateTime.now();
     if (now.difference(_lastScrollTime).inMilliseconds < 350) return;
 
@@ -171,7 +177,7 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
     KeyEvent event,
     double height,
   ) {
-    if (!widget.keyboardEnabled || event is! KeyDownEvent) {
+    if (!widget.keyboardEnabled || !widget.swipeEnabled || event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
 
@@ -260,50 +266,68 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
             },
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onVerticalDragStart: (_) {},
-              onVerticalDragCancel: () {
-                if (!_switching && !_isAnimating) {
-                  _animateSlideFrom(_dragOffset);
-                }
-              },
-              onVerticalDragUpdate: (details) {
-                if (_isAnimating || _switching) return;
-                setState(() {
-                  _dragOffset += details.delta.dy;
-                });
-              },
-              onVerticalDragEnd: (details) {
-                if (_isAnimating || _switching) return;
-                final velocity = details.primaryVelocity ?? 0;
-                if (_dragOffset < -60 || velocity < -400) {
-                  animateNext(height);
-                } else if (_dragOffset > 60 || velocity > 400) {
-                  animatePrevious(height);
-                } else {
-                  _animateSlideFrom(_dragOffset);
-                }
-              },
-              onHorizontalDragStart: (_) => _horizontalDrag = 0,
-              onHorizontalDragUpdate: (details) {
-                _horizontalDrag += details.delta.dx;
-                if (_horizontalDrag > 35) {
-                  _horizontalDrag = 0;
-                  widget.onSeekForward();
-                } else if (_horizontalDrag < -35) {
-                  _horizontalDrag = 0;
-                  widget.onSeekBackward();
-                }
-              },
-              onTap: () {
-                _focusNode.requestFocus();
-                widget.onTogglePlayPause();
-              },
-              onDoubleTap: widget.doubleTapFavorite
+              onVerticalDragStart: widget.swipeEnabled ? (_) {} : null,
+              onVerticalDragCancel: widget.swipeEnabled
+                  ? () {
+                      if (!_switching && !_isAnimating) {
+                        _animateSlideFrom(_dragOffset);
+                      }
+                    }
+                  : null,
+              onVerticalDragUpdate: widget.swipeEnabled
+                  ? (details) {
+                      if (_isAnimating || _switching) return;
+                      setState(() {
+                        _dragOffset += details.delta.dy;
+                      });
+                    }
+                  : null,
+              onVerticalDragEnd: widget.swipeEnabled
+                  ? (details) {
+                      if (_isAnimating || _switching) return;
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (_dragOffset < -60 || velocity < -400) {
+                        animateNext(height);
+                      } else if (_dragOffset > 60 || velocity > 400) {
+                        animatePrevious(height);
+                      } else {
+                        _animateSlideFrom(_dragOffset);
+                      }
+                    }
+                  : null,
+              onHorizontalDragStart: widget.swipeEnabled
+                  ? (_) => _horizontalDrag = 0
+                  : null,
+              onHorizontalDragUpdate: widget.swipeEnabled
+                  ? (details) {
+                      _horizontalDrag += details.delta.dx;
+                      if (_horizontalDrag > 35) {
+                        _horizontalDrag = 0;
+                        widget.onSeekForward();
+                      } else if (_horizontalDrag < -35) {
+                        _horizontalDrag = 0;
+                        widget.onSeekBackward();
+                      }
+                    }
+                  : null,
+              onTap: widget.swipeEnabled
+                  ? () {
+                      _focusNode.requestFocus();
+                      widget.onTogglePlayPause();
+                    }
+                  : null,
+              onDoubleTap: widget.swipeEnabled && widget.doubleTapFavorite
                   ? widget.onToggleFavorite
                   : null,
-              onLongPressStart: (_) => widget.onSpeed?.call(2),
-              onLongPressEnd: (_) => widget.onSpeed?.call(1),
-              onLongPressCancel: () => widget.onSpeed?.call(1),
+              onLongPressStart: widget.swipeEnabled
+                  ? (_) => widget.onSpeed?.call(2)
+                  : null,
+              onLongPressEnd: widget.swipeEnabled
+                  ? (_) => widget.onSpeed?.call(1)
+                  : null,
+              onLongPressCancel: widget.swipeEnabled
+                  ? () => widget.onSpeed?.call(1)
+                  : null,
               child: Stack(
                 fit: StackFit.expand,
                 children: [

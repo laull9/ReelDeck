@@ -99,19 +99,23 @@ void main() {
     final pool = PlayerPool(playerFactory: FakePlayerService.new);
     expect(pool.currentPlayer, isNull);
     expect(pool.nextPlayer, isNull);
+    expect(pool.previousPlayer, isNull);
 
     await pool.initialize();
 
     expect(pool.currentPlayer, isNotNull);
     expect(pool.nextPlayer, isNotNull);
+    expect(pool.previousPlayer, isNotNull);
 
     final initialCurrent = pool.currentPlayer;
     final initialNext = pool.nextPlayer;
+    final initialPrevious = pool.previousPlayer;
 
     await pool.advanceToNext();
 
     expect(pool.currentPlayer, equals(initialNext));
-    expect(pool.nextPlayer, equals(initialCurrent));
+    expect(pool.previousPlayer, equals(initialCurrent));
+    expect(pool.nextPlayer, equals(initialPrevious));
     expect(pool.currentPlayer?.isPlaying, isTrue);
     await pool.dispose();
   });
@@ -122,13 +126,37 @@ void main() {
 
     final initialCurrent = pool.currentPlayer;
     final initialNext = pool.nextPlayer;
+    final initialPrevious = pool.previousPlayer;
 
     await pool.goToPrevious('test_path.mp4');
 
-    expect(pool.currentPlayer, equals(initialNext));
+    expect(pool.currentPlayer, equals(initialPrevious));
     expect(pool.nextPlayer, equals(initialCurrent));
+    expect(pool.previousPlayer, equals(initialNext));
     expect(pool.currentPlayer?.currentPath, equals('test_path.mp4'));
     expect(pool.currentPlayer?.isPlaying, isTrue);
+    await pool.dispose();
+  });
+
+  test('PlayerPool 双向预载验证', () async {
+    final pool = PlayerPool(playerFactory: FakePlayerService.new);
+    await pool.initialize();
+
+    await pool.preloadNext('next.mp4', start: const Duration(seconds: 5));
+    await pool.preloadPrevious('prev.mp4', start: const Duration(seconds: 10));
+
+    expect(
+      pool.hasPreloadedNext('next.mp4', const Duration(seconds: 5)),
+      isTrue,
+    );
+    expect(
+      pool.hasPreloadedPrevious('prev.mp4', const Duration(seconds: 10)),
+      isTrue,
+    );
+
+    await pool.advanceToNext();
+    expect(pool.currentPlayer?.currentPath, 'next.mp4');
+
     await pool.dispose();
   });
 }

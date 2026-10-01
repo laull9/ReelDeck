@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../l10n/app_localizations.dart';
 import 'shortcut_action.dart';
 import 'shortcut_binding.dart';
 
@@ -95,8 +96,9 @@ class _ShortcutEditorDialogState extends State<ShortcutEditorDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     return AlertDialog(
-      title: Text('设置快捷键：${widget.action.label}'),
+      title: Text('${l10n.editShortcut}：${widget.action.label}'),
       content: Focus(
         focusNode: _focusNode,
         autofocus: true,
@@ -131,7 +133,7 @@ class _ShortcutEditorDialogState extends State<ShortcutEditorDialog> {
                     Text(
                       _capturedBinding != null
                           ? _capturedBinding!.displayString()
-                          : '请按下键盘按键...',
+                          : l10n.pressKeyToRecord,
                       style: TextStyle(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
@@ -142,8 +144,8 @@ class _ShortcutEditorDialogState extends State<ShortcutEditorDialog> {
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      '支持组合键：Shift、Ctrl、Option/Alt、Cmd/Win',
+                    const Text(
+                      'Shift, Ctrl, Alt, Cmd / Win',
                       style: TextStyle(fontSize: 12, color: Colors.white38),
                     ),
                   ],
@@ -158,7 +160,7 @@ class _ShortcutEditorDialogState extends State<ShortcutEditorDialog> {
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
-                        '按键已被「$_conflictActionName」使用，保存将同时保留或覆盖',
+                        '$_conflictActionName',
                         style: const TextStyle(color: Colors.amber, fontSize: 12),
                       ),
                     ),
@@ -172,13 +174,13 @@ class _ShortcutEditorDialogState extends State<ShortcutEditorDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(l10n.cancel),
         ),
         FilledButton(
           onPressed: _capturedBinding != null
               ? () => Navigator.pop(context, _capturedBinding)
               : null,
-          child: const Text('保存'),
+          child: Text(l10n.save),
         ),
       ],
     );

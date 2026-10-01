@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../settings/settings.dart';
 import 'shortcut_action.dart';
 import 'shortcut_binding.dart';
@@ -12,15 +13,16 @@ class ShortcutsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final settings = context.watch<AppSettings>();
     final shortcuts = settings.shortcuts;
+    final l10n = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('快捷键设置'),
+        title: Text(l10n.shortcutsSettings),
         actions: [
           TextButton.icon(
             onPressed: () => _confirmReset(context, settings),
             icon: const Icon(Icons.restore, size: 18),
-            label: const Text('恢复默认'),
+            label: Text(l10n.resetDefaults),
           ),
         ],
       ),
@@ -188,19 +190,20 @@ class ShortcutsScreen extends StatelessWidget {
   }
 
   Future<void> _confirmReset(BuildContext context, AppSettings settings) async {
+    final l10n = AppLocalizations.of(context);
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('恢复默认快捷键'),
-        content: const Text('确定将所有快捷键重置为系统默认配置吗？'),
+        title: Text(l10n.resetShortcutsTitle),
+        content: Text(l10n.resetShortcutsContent),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
+            child: Text(l10n.cancel),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('确定重置'),
+            child: Text(l10n.confirmReset),
           ),
         ],
       ),

@@ -1,87 +1,94 @@
 <div align="center">
-  <img src="assets/icon/app_icon.png" width="144" alt="ReelDeck 图标" />
+  <img src="assets/icon/app_icon.png" width="144" alt="ReelDeck Icon" />
   <h1>ReelDeck</h1>
   <p>Pick a folder. Shuffle. Swipe.</p>
-  <p>选一个本地目录，开始随机刷视频。</p>
   <p>
-    <a href="https://github.com/laull9/ReelDeck/actions/workflows/release.yml"><img src="https://github.com/laull9/ReelDeck/actions/workflows/release.yml/badge.svg" alt="构建状态" /></a>
-    <img src="https://img.shields.io/badge/Flutter-3.47.5-02569B?logo=flutter" alt="Flutter 3.47.5" />
-    <img src="https://img.shields.io/badge/存储-完全本地-23DFA1" alt="完全本地" />
+    <a href="README.md">English</a> · 
+    <a href="README_zh.md">简体中文</a> · 
+    <a href="README_ja.md">日本語</a> · 
+    <a href="README_es.md">Español</a> · 
+    <a href="README_fr.md">Français</a>
   </p>
-  <p><a href="https://github.com/laull9/ReelDeck/releases">下载</a> · <a href="DESIGN.md">产品设计</a> · <a href="docs/releases.md">构建与发布</a> · <a href="TODO.md">设备验收</a></p>
+  <p>
+    <a href="https://github.com/laull9/ReelDeck/actions/workflows/release.yml"><img src="https://github.com/laull9/ReelDeck/actions/workflows/release.yml/badge.svg" alt="Build Status" /></a>
+    <img src="https://img.shields.io/badge/Flutter-3.47.5-02569B?logo=flutter" alt="Flutter 3.47.5" />
+    <img src="https://img.shields.io/badge/Storage-Fully%20Local-23DFA1" alt="Fully Local" />
+  </p>
+  <p><a href="https://github.com/laull9/ReelDeck/releases">Downloads</a> · <a href="DESIGN.md">Product Design</a> · <a href="docs/releases.md">Build & Release</a> · <a href="TODO.md">Device Verification</a></p>
 </div>
 
-ReelDeck 直接播放原文件。支持本机目录、移动硬盘和 Android 授权目录，递归建立轻量索引，再按一轮不重复的顺序播放。没有账号、云同步、上传或使用统计。
+ReelDeck plays your original files directly. It supports local drives, external disks, and Android Storage Access Framework (SAF) folders, building a lightweight recursive index and playing media in non-repeating rounds. No accounts, no cloud sync, no uploads, and no analytics.
 
-## 功能
+## Features
 
-- **随机播放**：默认用系统安全随机源生成 Fisher–Yates 队列；单轮不重复，重新洗牌时避免上一轮末条立即重现。
-- **播放范围**：全部、收藏、单个来源、子目录。隐藏视频或整个目录后，新增文件也遵守隐藏规则。
-- **播放顺序**：纯随机、智能随机、最新优先、最旧优先。智能随机尽量交错父目录；时间排序采用文件修改时间。
-- **视频控制**：播放、暂停、拖动进度、临时倍速、静音、全屏，以及完整显示、填满画面、原始尺寸三种显示方式。
-- **继续播放**：保存当前队列、播放位置、收藏和隐藏记录。关闭再打开，接着当前一轮播放。
-- **图片与 GIF**：在设置中开启，按停留时间播放，也能暂停或拖动计时进度。默认只播放视频。
-- **目录维护**：多个来源、手动重扫、每个来源独立选择递归扫描。目录断开时暂停，重连后可重试；单个坏文件自动跳过。
-- **文件操作**：桌面端在文件管理器中定位、确认后移入系统回收站。Android SAF 没有统一回收站，请使用隐藏或文档提供方的文件管理器。
-- **精简显示**：完整信息、仅进度、无浮层。移动鼠标或轻触唤出控制；支持关闭动画、双击收藏和键盘控制，快捷键可自定义。
+- **Shuffled Playback**: Cryptographically secure Fisher–Yates shuffle by default; non-repeating per round, preventing the last video from replaying immediately on reshuffle.
+- **Smooth Preloading**: 3-player ring buffer preloads adjacent items (previous and next), ensuring seamless transitions without black screens or frame flickering.
+- **Optimized Decoding**: Hardware acceleration profiles (`auto`, `auto-safe`, `no`) with streamlined demuxer probing and instant seek-to-zero frame detection.
+- **Playback Scope**: All media, favorites, single folder, or subfolder. Hidden videos or entire folders stay excluded even as new files are added.
+- **Queue Order**: Random, Smart Random (interleaving directories), Newest First, Oldest First.
+- **Video Controls**: Play/pause, scrub progress bar, temporary 2x speed hold, mute, fullscreen, and 3 display modes (Fit, Fill/Cover, Original Size).
+- **Resume Where You Left Off**: Restores current queue, position, favorites, and hidden states on app restart.
+- **Images & GIFs**: Optional photo and GIF support with customizable display timer, pause, and seekable progress bar.
+- **Folder Management**: Multi-source folders, manual rescan, and per-folder recursive options. Gracefully handles unmounted drives and skips broken media files.
+- **File Actions**: Reveal in desktop file manager, confirm to move to system trash. (Android SAF uses folder-level hide).
+- **Clean UI**: Full info, progress bar only, or no overlay. Touch or mouse movement brings up controls; customizable keyboard shortcuts.
+- **Internationalization**: Follows system locale automatically or can be configured in settings (English, Simplified Chinese, Japanese, Spanish, French).
 
-视频格式包括 MP4、MKV、MOV、M4V、WebM、AVI、MPG、MPEG、TS、M2TS、FLV、WMV；实际解码能力由 libmpv 决定。图片支持 JPG、JPEG、PNG、WebP、BMP、GIF，单张读取上限 64 MiB。
+Supported video formats include MP4, MKV, MOV, M4V, WebM, AVI, MPG, MPEG, TS, M2TS, FLV, WMV (backed by libmpv). Supported image formats include JPG, JPEG, PNG, WebP, BMP, GIF (up to 64 MiB each).
 
-桌面最多保留两个播放器，预加载下一条；Android 保留单解码器。扫描只读取路径、文件大小和修改时间，不生成缩略图，不进行后台编码探测或完整哈希。
+Desktop platforms use a 3-player bidirectional preloading pool; Android runs in a smooth single-player mode. Scanning only indexes paths, file sizes, and modification timestamps—no background thumbnailing or hashing.
 
-## 下载与安装
+## Download & Installation
 
-从 [Releases](https://github.com/laull9/ReelDeck/releases) 选择设备架构。表中的文件名对应当前工作流；旧版本的资产名称会有所不同。
+Pick the build matching your architecture from [Releases](https://github.com/laull9/ReelDeck/releases):
 
-| 平台 | x64 | ARM64 |
+| Platform | x64 | ARM64 |
 | --- | --- | --- |
 | Windows | `ReelDeck-windows-x64.zip` | `ReelDeck-windows-arm64.zip` |
 | macOS | `ReelDeck-macos-x64.zip` | `ReelDeck-macos-arm64.zip` |
 | Linux deb | `ReelDeck-linux-x64.deb` | `ReelDeck-linux-arm64.deb` |
 | Linux rpm | `ReelDeck-linux-x64.rpm` | `ReelDeck-linux-arm64.rpm` |
-| Android | ARMv7：`ReelDeck-android-armv7.apk` | `ReelDeck-android-arm64.apk` |
+| Android | ARMv7: `ReelDeck-android-armv7.apk` | `ReelDeck-android-arm64.apk` |
 
-Windows 安装对应架构的 [Microsoft Visual C++ v14 运行库](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist)，解压整个目录后运行 `reel_deck.exe`，保留同目录的 DLL 与 `data`。macOS 解压后将 `ReelDeck.app` 拖入应用程序目录；CI 使用本地签名，尚未做 Apple 公证。
+On Windows, install the [Microsoft Visual C++ v14 Redistributable](https://learn.microsoft.com/cpp/windows/latest-supported-vc-redist), extract the entire folder, and run `reel_deck.exe`. On macOS, drag `ReelDeck.app` into Applications.
 
-Linux 包在 Ubuntu 24.04 编译。deb 面向 Ubuntu 24.04 / Debian 13，rpm 面向具有相应 GTK3、libmpv 和 glibc 依赖的发行版；具体安装兼容性见 [设备验收记录](TODO.md)。
+Linux packages are built on Ubuntu 24.04:
 
 ```sh
 # Debian / Ubuntu
 sudo apt install ./ReelDeck-linux-arm64.deb
 
-# Fedora 等 RPM 发行版
+# Fedora / RHEL
 sudo dnf install ./ReelDeck-linux-arm64.rpm
 ```
 
-Android 需要 Android 7.0（API 24）或更新系统。老 ARM 设备选择 ARMv7 包，它不表示支持 Android 6 或更早系统。没有配置正式签名的构建在文件名加入 `-test-signed`；测试密钥不保证跨次构建一致。
+Android requires Android 7.0 (API 24) or newer.
 
-v0.3.0 开始使用固定 Android 发布密钥。此前安装过测试签名包的设备，需要先卸载旧包再安装；卸载会清除应用内的目录授权、队列和收藏记录，原始媒体文件不受影响。
+## Usage
 
-## 使用
+Launch the app and add a video directory. On Android, select a folder through SAF; on desktop, pick any local or external volume. Playback starts as soon as scanning finishes.
 
-打开应用，添加一个媒体目录。Android 会打开系统目录授权选择器；桌面端可选择本机或外置盘目录。扫描结束即可播放。
+Swipe up for next, swipe down for previous. Tap to toggle play/pause, double tap to favorite, long press for 2x speed, drag horizontally to scrub.
 
-上滑下一条，下滑上一条；点击播放或暂停，双击收藏，长按临时 2 倍速，水平拖动快进或后退。进度条支持连续拖动。顶部范围选择器可切换收藏、来源和子目录，“更多”菜单提供隐藏与文件操作。
-
-| 默认快捷键 | 操作 |
+| Default Shortcut | Action |
 | --- | --- |
-| `↓` / `J` | 下一条 |
-| `↑` / `K` | 上一条 |
-| `Space` | 播放 / 暂停 |
-| `←` / `→` | 后退 / 快进 5 秒 |
-| `Shift + ←` / `Shift + →` | 后退 / 快进 15 秒 |
-| `F` | 收藏 / 取消收藏 |
-| `H` / `Shift + H` | 隐藏视频 / 隐藏所在目录 |
-| `R` | 重新排列队列 |
-| `M` | 静音 |
-| `Enter` / `Esc` | 进入 / 退出全屏 |
-| `I` | 切换信息显示 |
+| `↓` / `J` | Next video |
+| `↑` / `K` | Previous video |
+| `Space` | Play / Pause |
+| `←` / `→` | Seek backward / forward 5s |
+| `Shift + ←` / `Shift + →` | Seek backward / forward 15s |
+| `F` | Toggle favorite |
+| `H` / `Shift + H` | Hide video / Hide folder |
+| `R` | Reshuffle queue |
+| `M` | Toggle mute |
+| `Enter` / `Esc` | Enter / Exit fullscreen |
+| `I` | Toggle overlay info |
 
-在设置中自定义快捷键。暂停或进入设置页时保存进度；播放错误保留最近 100 条，可在设置或“更多”菜单中查看和清空。
+Configure shortcuts in Settings. Position is saved automatically on pause or when opening settings; playback errors keep the last 100 entries.
 
-## 本地开发
+## Development
 
-使用 Flutter 3.47.5 / Dart 3.13.4。项目采用 media_kit / libmpv、Drift / SQLite、Provider，以及各平台原生存储桥接。构建桌面应用需要对应系统的工具链。
+Built with Flutter 3.47.5 / Dart 3.13.4, using media_kit / libmpv, Drift / SQLite, Provider, and native platform channels.
 
 ```sh
 flutter pub get --enforce-lockfile
@@ -90,26 +97,20 @@ flutter test --no-pub
 flutter run -d macos
 ```
 
-Linux 开发机需要 `clang`、`cmake`、`ninja-build`、`pkg-config`、`libgtk-3-dev`、`libmpv-dev`、`libepoxy-dev` 和 `liblzma-dev`。Windows ARM64 的 ANGLE 准备步骤、Android 签名配置和所有打包命令见 [构建与发布](docs/releases.md)。
-
-数据库定义变更后生成 Drift 代码：
+Code generation for Drift database tables:
 
 ```sh
 dart run build_runner build --delete-conflicting-outputs
 ```
 
-应用只保存目录授权、媒体索引、收藏、隐藏规则、会话、设置与错误日志。媒体身份使用来源 ID 和相对路径。macOS 通过安全作用域书签保留授权；Windows 使用卷 GUID，Linux 使用可获得的卷 UUID，Android 使用 SAF 树 URI。
+## Documentation
 
-## 项目文档
-
-| 文档 | 内容 |
+| Document | Description |
 | --- | --- |
-| [DESIGN](DESIGN.md) | 产品边界、交互与数据模型 |
-| [实施约定](docs/implementation.md) | 第二、第三版功能与验收约束 |
-| [播放维护](docs/playback.md) | 播放器、预加载、首帧和进度恢复 |
-| [构建与发布](docs/releases.md) | CI 矩阵、签名、打包与校验 |
-| [图标资源](assets/icon/README.md) | 母图、平台尺寸与重生成 |
-| [构建验收](docs/verification.md) | 测试、全矩阵构建与产物校验记录 |
-| [TODO](TODO.md) | 尚待设备验证的项目 |
-
-项目图标使用提供的透明 PNG。SVG 文件嵌入同一图像，平台图标由脚本统一生成。第三方 Windows 原生依赖的许可和本地修改说明保存在 [vendor](vendor/media_kit_libs_windows_video/README.md)。
+| [DESIGN](DESIGN.md) | Architecture, interactions, and data model |
+| [Implementation](docs/implementation.md) | Conventions and acceptance criteria |
+| [Playback](docs/playback.md) | Players, preloading, and state restoration |
+| [Build & Release](docs/releases.md) | CI matrix, signing, packaging, and checksums |
+| [App Icon](assets/icon/README.md) | Source artwork and generation scripts |
+| [Verification](docs/verification.md) | Test runs and verification log |
+| [TODO](TODO.md) | Device verification tracking |

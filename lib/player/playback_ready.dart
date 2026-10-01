@@ -11,10 +11,11 @@ Future<void> waitForPlaybackReady({
     final seeking = await getProperty('seeking');
     final output = await getProperty('vo-configured');
     final seconds = double.tryParse(await getProperty('time-pos'));
-    if (seeking == 'no' &&
-        output == 'yes' &&
-        seconds != null &&
-        (seconds - position.inMilliseconds / 1000).abs() < 0.25) {
+    if (output == 'yes' &&
+        seeking == 'no' &&
+        (position == Duration.zero ||
+            (seconds != null &&
+                (seconds - position.inMilliseconds / 1000).abs() < 0.35))) {
       return;
     }
     await Future<void>.delayed(const Duration(milliseconds: 16));

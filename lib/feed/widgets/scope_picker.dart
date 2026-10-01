@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../../l10n/app_localizations.dart';
 import '../../sources/source_manager.dart';
 import '../feed_controller.dart';
 
@@ -11,9 +12,10 @@ class ScopePicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final items = <DropdownMenuItem<String>>[
-      const DropdownMenuItem(value: 'all', child: Text('全部视频')),
-      const DropdownMenuItem(value: 'favorites', child: Text('收藏')),
+      DropdownMenuItem(value: 'all', child: Text(l10n.allVideos)),
+      DropdownMenuItem(value: 'favorites', child: Text(l10n.favorites)),
       ...sources.sources.map(
         (s) => DropdownMenuItem(
           value: 'source:${s.id}',
@@ -28,7 +30,7 @@ class ScopePicker extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-      const DropdownMenuItem(value: 'choose-folder', child: Text('选择子目录…')),
+      DropdownMenuItem(value: 'choose-folder', child: Text(l10n.chooseFolderEllipsis)),
     ];
     return DropdownButtonHideUnderline(
       child: DropdownButton<String>(
@@ -84,11 +86,12 @@ class _FolderDialogState extends State<_FolderDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context);
     final filtered = _folders
         .where((f) => f.$2.toLowerCase().contains(_query))
         .toList();
     return AlertDialog(
-      title: const Text('选择子目录'),
+      title: Text(l10n.chooseFolder),
       content: SizedBox(
         width: 480,
         height: 400,
@@ -96,13 +99,13 @@ class _FolderDialogState extends State<_FolderDialog> {
           children: [
             TextField(
               autofocus: true,
-              decoration: const InputDecoration(labelText: '搜索目录'),
+              decoration: const InputDecoration(labelText: 'Search'),
               onChanged: (value) =>
                   setState(() => _query = value.toLowerCase()),
             ),
             Expanded(
               child: filtered.isEmpty
-                  ? const Center(child: Text('没有符合条件的目录'))
+                  ? Center(child: Text(l10n.noMatchingFolders))
                   : ListView.builder(
                       itemCount: filtered.length,
                       itemBuilder: (context, index) => ListTile(
@@ -117,7 +120,7 @@ class _FolderDialogState extends State<_FolderDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('取消'),
+          child: Text(l10n.cancel),
         ),
       ],
     );
