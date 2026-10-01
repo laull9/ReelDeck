@@ -7,6 +7,7 @@ class QueueEngine {
   QueueEngine({Random? random}) : _random = random ?? Random.secure();
 
   final Random _random;
+  List<int> Function(List<int>, Random)? orderer;
   List<int> _queue = [];
   int _currentIndex = -1;
 
@@ -15,15 +16,43 @@ class QueueEngine {
     _currentIndex = _queue.isEmpty ? -1 : index.clamp(0, _queue.length - 1);
   }
 
-  void reconcile(List<int> eligible) {
+  void reconcile(List<int> eligible, {bool reorderPending = false}) {
     final current = currentId;
     final allowed = eligible.toSet();
     final retained = _queue.where(allowed.contains).toList();
     final existing = retained.toSet();
     final added = eligible.where((id) => !existing.contains(id)).toList();
     fisherYatesShuffle(added, random: _random);
-    final index = current == null ? 0 : retained.indexOf(current);
-    restore([...retained, ...added], index < 0 ? _currentIndex : index);
+    final played = _queue
+        .take(_currentIndex < 0 ? 0 : _currentIndex)
+        .where(allowed.contains)
+        .toList();
+    final upcoming = _queue
+        .skip(_currentIndex < 0 ? 0 : _currentIndex)
+        .where(allowed.contains)
+        .toList();
+    var pending = [...upcoming, ...added];
+    if (reorderPending && orderer != null) {
+      final keepCurrent = current != null && pending.remove(current);
+      pending = orderer!(pending, _random);
+      if (keepCurrent) pending.insert(0, current);
+    }
+    if (pending.isEmpty && played.isNotEmpty) {
+      _queue = played;
+      _currentIndex = played.length;
+      return;
+    }
+    restore([...played, ...pending], played.length);
+  }
+
+  void restart() => _currentIndex = _queue.isEmpty ? -1 : 0;
+
+  void _order() {
+    if (orderer != null) {
+      _queue = orderer!(_queue, _random);
+    } else {
+      fisherYatesShuffle(_queue, random: _random);
+    }
   }
 
   /// Current list of media IDs in the queue.
@@ -34,8 +63,8 @@ class QueueEngine {
 
   /// Builds a shuffled queue from [eligibleMediaIds] using Fisher-Yates.
   void buildQueue(List<int> eligibleMediaIds) {
-    _queue = List<int>.from(eligibleMediaIds);
-    fisherYatesShuffle(_queue, random: _random);
+    _queue = eligibleMediaIds.toSet().toList();
+    _order();
     _currentIndex = _queue.isNotEmpty ? 0 : -1;
   }
 
@@ -90,7 +119,7 @@ class QueueEngine {
   void reshuffle() {
     if (_queue.isEmpty) return;
     final previousLast = currentId;
-    fisherYatesShuffle(_queue, random: _random);
+    _order();
     if (_queue.length > 1 && _queue.first == previousLast) {
       final swapIndex = 1 + _random.nextInt(_queue.length - 1);
       final temp = _queue[0];

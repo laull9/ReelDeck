@@ -26,10 +26,11 @@ void main() {
       await tempDir.delete(recursive: true);
     });
 
-    test('finds supported video files recursively', () async {
+    test('finds videos and images recursively', () async {
       final results = await scanner.scan(tempDir.path, recursive: true);
 
-      expect(results.length, 2);
+      expect(results.length, 3);
+      expect(results, contains(p.join('subdir', 'image.jpg')));
       expect(results, contains('video1.mp4'));
       expect(results, contains(p.join('subdir', 'video2.mkv')));
     });

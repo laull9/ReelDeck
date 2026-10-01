@@ -1,24 +1,39 @@
+import 'dart:io';
+
 import 'player_service.dart';
 import 'media_kit_player.dart';
 
-/// Manages a fixed pool of players (current + next) for seamless feed playback.
+/// Android 只打开当前视频；桌面保留当前和下一条播放器。
 class PlayerPool {
   final PlayerService Function() _playerFactory;
+  final bool preloadEnabled;
+  final List<PlayerService> _players = [];
+  Duration? _preloadedStart;
 
   PlayerService? _currentPlayer;
   PlayerService? _nextPlayer;
 
-  PlayerPool({PlayerService Function()? playerFactory})
-    : _playerFactory = playerFactory ?? MediaKitPlayerService.new;
+  PlayerPool({PlayerService Function()? playerFactory, bool? preloadEnabled})
+    : _playerFactory = playerFactory ?? MediaKitPlayerService.new,
+      preloadEnabled = preloadEnabled ?? !Platform.isAndroid;
+
+  List<PlayerService> get players => List.unmodifiable(_players);
+
+  bool hasPreloaded(String path, Duration start) =>
+      _nextPlayer?.currentPath == path && _preloadedStart == start;
 
   PlayerService? get currentPlayer => _currentPlayer;
   PlayerService? get nextPlayer => _nextPlayer;
 
-  /// Initializes the pool by creating exactly 2 players.
+  /// 按平台创建播放器。
   Future<void> initialize() async {
     if (_currentPlayer != null) return;
     _currentPlayer = _playerFactory();
-    _nextPlayer = _playerFactory();
+    _players.add(_currentPlayer!);
+    if (preloadEnabled) {
+      _nextPlayer = _playerFactory();
+      _players.add(_nextPlayer!);
+    }
   }
 
   /// Opens and plays the specified media on the current player.
@@ -31,14 +46,21 @@ class PlayerPool {
   }
 
   /// Preloads the specified media on the next player without playing it.
-  Future<void> preloadNext(String path) async {
+  Future<void> preloadNext(
+    String path, {
+    Duration start = Duration.zero,
+  }) async {
     final player = _nextPlayer;
     if (player != null) {
-      await player.open(path);
+      _preloadedStart = null;
+      await player.open(path, start: start);
+      _preloadedStart = start;
     }
   }
 
   Future<void> swap() async {
+    if (_nextPlayer == null) return;
+    _preloadedStart = null;
     await _currentPlayer?.pause();
     final previous = _currentPlayer;
     _currentPlayer = _nextPlayer;
@@ -86,5 +108,6 @@ class PlayerPool {
     await _nextPlayer?.dispose();
     _currentPlayer = null;
     _nextPlayer = null;
+    _players.clear();
   }
 }

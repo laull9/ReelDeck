@@ -1,16 +1,21 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/gestures.dart';
+
 import '../shortcuts/shortcut_action.dart';
 import '../shortcuts/shortcut_binding.dart';
 
 class FeedGestureHandler extends StatefulWidget {
   final Widget child;
-  final Widget? incomingChild;
+  final bool animations;
+  final bool doubleTapFavorite;
+  final bool keyboardEnabled;
   final Widget? topOverlay;
   final Widget? bottomOverlay;
-  final VoidCallback onNext;
-  final VoidCallback onPrevious;
+  final FutureOr<void> Function() onNext;
+  final FutureOr<void> Function() onPrevious;
   final VoidCallback onTogglePlayPause;
   final VoidCallback onToggleFavorite;
   final VoidCallback onSeekForward;
@@ -30,7 +35,9 @@ class FeedGestureHandler extends StatefulWidget {
   const FeedGestureHandler({
     super.key,
     required this.child,
-    this.incomingChild,
+    this.animations = true,
+    this.doubleTapFavorite = true,
+    this.keyboardEnabled = true,
     this.topOverlay,
     this.bottomOverlay,
     required this.onNext,
@@ -61,6 +68,7 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
   final FocusNode _focusNode = FocusNode();
   late final AnimationController _animController;
   Animation<double>? _slideAnimation;
+  bool _switching = false;
 
   double _dragOffset = 0.0;
   double _horizontalDrag = 0.0;
@@ -70,10 +78,15 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
   @override
   void initState() {
     super.initState();
-    _animController = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 260),
-    );
+    _animController =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 180),
+        )..addListener(() {
+          if (mounted) {
+            setState(() => _dragOffset = _slideAnimation?.value ?? 0);
+          }
+        });
   }
 
   @override
@@ -83,44 +96,53 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
     super.dispose();
   }
 
-  void _animateSlideFrom(double initialOffset) {
+  Future<void> _animateSlideFrom(double initialOffset) async {
     if (!mounted) return;
+    if (!widget.animations) {
+      setState(() => _dragOffset = 0);
+      return;
+    }
     _animController.stop();
     _isAnimating = true;
     _dragOffset = initialOffset;
-    _slideAnimation = Tween<double>(begin: initialOffset, end: 0.0).animate(
-      CurvedAnimation(parent: _animController, curve: Curves.easeOutCubic),
-    )..addListener(() {
-        setState(() {
-          _dragOffset = _slideAnimation!.value;
-        });
-      });
-
-    void statusListener(AnimationStatus status) {
-      if (status == AnimationStatus.completed) {
-        _animController.removeStatusListener(statusListener);
-        _isAnimating = false;
-        _dragOffset = 0.0;
-        if (mounted) setState(() {});
-      }
+    _slideAnimation = Tween<double>(
+      begin: initialOffset,
+      end: 0,
+    ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_animController);
+    try {
+      await _animController.forward(from: 0).orCancel;
+    } on TickerCanceled {
+      return;
     }
-
-    _animController.addStatusListener(statusListener);
-    _animController.forward(from: 0.0);
+    if (mounted) {
+      setState(() {
+        _isAnimating = false;
+        _dragOffset = 0;
+      });
+    }
   }
 
-  void animateNext([double? height]) {
-    widget.onNext();
-    _animateSlideFrom(120.0);
+  Future<void> _switch(bool next) async {
+    if (_switching || _isAnimating) return;
+    _switching = true;
+    // 打开期间停止展示预览，等真实播放画面准备好再做入场动画。
+    setState(() => _dragOffset = 0);
+    try {
+      final result = next ? widget.onNext() : widget.onPrevious();
+      if (result is Future<void>) await result;
+      if (mounted && widget.animations) {
+        await _animateSlideFrom(next ? 48 : -48);
+      }
+    } finally {
+      _switching = false;
+    }
   }
 
-  void animatePrevious([double? height]) {
-    widget.onPrevious();
-    _animateSlideFrom(-120.0);
-  }
+  void animateNext([double? height]) => unawaited(_switch(true));
+  void animatePrevious([double? height]) => unawaited(_switch(false));
 
   void _handleScroll(PointerScrollEvent event, double height) {
-    if (_isAnimating) return;
+    if (_isAnimating || _switching) return;
     final now = DateTime.now();
     if (now.difference(_lastScrollTime).inMilliseconds < 350) return;
 
@@ -138,13 +160,16 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
     KeyEvent event,
     double height,
   ) {
-    if (event is! KeyDownEvent) return KeyEventResult.ignored;
+    if (!widget.keyboardEnabled || event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
 
     if (ModalRoute.of(context)?.isCurrent != true) {
       return KeyEventResult.ignored;
     }
 
-    final activeShortcuts = widget.shortcuts ?? ShortcutAction.createDefaultMap();
+    final activeShortcuts =
+        widget.shortcuts ?? ShortcutAction.createDefaultMap();
     final action = ShortcutBinding.matchAction(
       activeShortcuts,
       event,
@@ -170,10 +195,10 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
         widget.onSeekBackwardLarge();
         return KeyEventResult.handled;
       case ShortcutAction.next:
-        widget.onNext();
+        animateNext(height);
         return KeyEventResult.handled;
       case ShortcutAction.previous:
-        widget.onPrevious();
+        animatePrevious(height);
         return KeyEventResult.handled;
       case ShortcutAction.reshuffle:
         widget.onReshuffle();
@@ -202,24 +227,12 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
     }
   }
 
-  Widget _buildPlaceholder({required bool isNext}) {
-    return Container(
-      color: Colors.black,
-      child: Center(
-        child: Icon(
-          isNext ? Icons.skip_next : Icons.skip_previous,
-          size: 48,
-          color: Colors.white24,
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final height = constraints.maxHeight.isFinite && constraints.maxHeight > 0
+        final height =
+            constraints.maxHeight.isFinite && constraints.maxHeight > 0
             ? constraints.maxHeight
             : 800.0;
 
@@ -235,27 +248,23 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
             },
             child: GestureDetector(
               behavior: HitTestBehavior.opaque,
-              onVerticalDragStart: (_) {
-                if (_isAnimating) {
-                  _animController.stop();
-                  _isAnimating = false;
-                }
+              onVerticalDragStart: (_) {},
+              onVerticalDragCancel: () {
+                if (!_switching) _animateSlideFrom(_dragOffset);
               },
               onVerticalDragUpdate: (details) {
-                if (_isAnimating) return;
+                if (_isAnimating || _switching) return;
                 setState(() {
                   _dragOffset += details.delta.dy;
                 });
               },
               onVerticalDragEnd: (details) {
-                if (_isAnimating) return;
+                if (_isAnimating || _switching) return;
                 final velocity = details.primaryVelocity ?? 0;
                 if (_dragOffset < -60 || velocity < -400) {
-                  widget.onNext();
-                  _animateSlideFrom(120.0);
+                  animateNext(height);
                 } else if (_dragOffset > 60 || velocity > 400) {
-                  widget.onPrevious();
-                  _animateSlideFrom(-120.0);
+                  animatePrevious(height);
                 } else {
                   _animateSlideFrom(_dragOffset);
                 }
@@ -275,7 +284,9 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
                 _focusNode.requestFocus();
                 widget.onTogglePlayPause();
               },
-              onDoubleTap: widget.onToggleFavorite,
+              onDoubleTap: widget.doubleTapFavorite
+                  ? widget.onToggleFavorite
+                  : null,
               onLongPressStart: (_) => widget.onSpeed?.call(2),
               onLongPressEnd: (_) => widget.onSpeed?.call(1),
               onLongPressCancel: () => widget.onSpeed?.call(1),
@@ -294,13 +305,12 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
                         if (_dragOffset < 0)
                           Transform.translate(
                             offset: Offset(0, _dragOffset + height),
-                            child: widget.incomingChild ??
-                                _buildPlaceholder(isNext: true),
+                            child: const ColoredBox(color: Colors.black),
                           ),
                         if (_dragOffset > 0)
                           Transform.translate(
                             offset: Offset(0, _dragOffset - height),
-                            child: _buildPlaceholder(isNext: false),
+                            child: const ColoredBox(color: Colors.black),
                           ),
                       ],
                     ),

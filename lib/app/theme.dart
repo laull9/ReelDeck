@@ -6,7 +6,7 @@ class AppTheme {
       useMaterial3: true,
       brightness: Brightness.dark,
       colorScheme: ColorScheme.fromSeed(
-        seedColor: Colors.deepPurple,
+        seedColor: const Color(0xFF23DFA1),
         brightness: Brightness.dark,
       ),
       scaffoldBackgroundColor: Colors.black,
@@ -22,13 +22,13 @@ class AppTheme {
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith<Color>((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.deepPurpleAccent;
+            return const Color(0xFF23DFA1);
           }
           return Colors.grey;
         }),
         trackColor: WidgetStateProperty.resolveWith<Color>((states) {
           if (states.contains(WidgetState.selected)) {
-            return Colors.deepPurpleAccent.withAlpha(128);
+            return const Color(0xFF23DFA1).withAlpha(128);
           }
           return Colors.grey.withAlpha(128);
         }),

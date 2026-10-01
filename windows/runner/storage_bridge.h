@@ -83,6 +83,43 @@ inline void Register(flutter::BinaryMessenger* messenger, HWND window) {
       if (attributes == INVALID_FILE_ATTRIBUTES || !(attributes & FILE_ATTRIBUTE_DIRECTORY)) { result->Success(); return; }
       result->Success(Description(path, locator)); return;
     }
+    if (call.method_name() == "reveal" || call.method_name() == "trash") {
+      const auto* args = std::get_if<flutter::EncodableMap>(call.arguments());
+      if (!args) { result->Error("arguments", "缺少文件位置"); return; }
+      auto location = args->find(flutter::EncodableValue("locator"));
+      auto relative = args->find(flutter::EncodableValue("path"));
+      if (location == args->end() || relative == args->end() ||
+          !std::holds_alternative<std::string>(location->second) ||
+          !std::holds_alternative<std::string>(relative->second)) {
+        result->Error("arguments", "文件位置无效"); return;
+      }
+      auto locator = Wide(std::get<std::string>(location->second));
+      auto path = locator + L"\\" + Wide(std::get<std::string>(relative->second));
+      IShellItem* item = nullptr;
+      HRESULT hr = SHCreateItemFromParsingName(path.c_str(), nullptr, IID_PPV_ARGS(&item));
+      if (SUCCEEDED(hr) && call.method_name() == "reveal") {
+        PIDLIST_ABSOLUTE pidl = nullptr;
+        hr = SHParseDisplayName(path.c_str(), nullptr, &pidl, 0, nullptr);
+        if (SUCCEEDED(hr)) { hr = SHOpenFolderAndSelectItems(pidl, 0, nullptr, 0); CoTaskMemFree(pidl); }
+      } else if (SUCCEEDED(hr)) {
+        IFileOperation* operation = nullptr;
+        hr = CoCreateInstance(CLSID_FileOperation, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&operation));
+        if (SUCCEEDED(hr)) {
+          operation->SetOwnerWindow(window);
+          hr = operation->SetOperationFlags(FOF_ALLOWUNDO | FOFX_RECYCLEONDELETE | FOF_NOCONFIRMATION | FOF_NOERRORUI);
+          if (SUCCEEDED(hr)) hr = operation->DeleteItem(item, nullptr);
+          if (SUCCEEDED(hr)) hr = operation->PerformOperations();
+          BOOL aborted = FALSE;
+          operation->GetAnyOperationsAborted(&aborted);
+          if (aborted) hr = E_ABORT;
+          operation->Release();
+        }
+      }
+      if (item) item->Release();
+      if (FAILED(hr)) result->Error("file", "系统文件操作失败");
+      else result->Success();
+      return;
+    }
     result->NotImplemented();
   });
 }

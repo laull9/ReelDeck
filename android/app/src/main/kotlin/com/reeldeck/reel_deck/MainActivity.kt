@@ -12,7 +12,7 @@ import java.util.concurrent.Executors
 class MainActivity : FlutterActivity() {
     private var pending: MethodChannel.Result? = null
     private val worker = Executors.newSingleThreadExecutor()
-    private val extensions = setOf("mp4", "mkv", "mov", "m4v", "webm", "avi", "mpg", "mpeg", "ts", "m2ts", "flv", "wmv")
+    private val extensions = setOf("mp4", "mkv", "mov", "m4v", "webm", "avi", "mpg", "mpeg", "ts", "m2ts", "flv", "wmv", "jpg", "jpeg", "png", "webp", "bmp", "gif")
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -24,6 +24,28 @@ class MainActivity : FlutterActivity() {
                     val intent = Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).addFlags(
                         Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
                     startActivityForResult(intent, 431)
+                    return@setMethodCallHandler
+                }
+                if (call.method == "readImage") {
+                    worker.execute {
+                        try {
+                            val uri = Uri.parse(call.argument<String>("uri") ?: error("缺少图片位置"))
+                            val bytes = contentResolver.openInputStream(uri)?.use { stream ->
+                                val output = java.io.ByteArrayOutputStream()
+                                val buffer = ByteArray(65536)
+                                while (true) {
+                                    val count = stream.read(buffer)
+                                    if (count < 0) break
+                                    if (output.size() + count > 64 * 1024 * 1024) error("图片超过 64 MiB")
+                                    output.write(buffer, 0, count)
+                                }
+                                output.toByteArray()
+                            }
+                            runOnUiThread { result.success(bytes) }
+                        } catch (e: Exception) {
+                            runOnUiThread { result.error("image", e.message, null) }
+                        }
+                    }
                     return@setMethodCallHandler
                 }
                 worker.execute {

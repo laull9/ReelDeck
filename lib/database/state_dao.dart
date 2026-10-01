@@ -16,72 +16,39 @@ class StateDao extends DatabaseAccessor<AppDatabase> with _$StateDaoMixin {
   Future<void> upsertState(MediaStatesCompanion state) =>
       into(mediaStates).insertOnConflictUpdate(state);
 
-  Future<void> setFavorite(int mediaId, bool favorite) async {
-    final existing = await getState(mediaId);
-    if (existing != null) {
-      await update(mediaStates).replace(existing.copyWith(favorite: favorite));
-    } else {
-      await into(mediaStates).insert(
-        MediaStatesCompanion.insert(
-          mediaId: Value(mediaId),
-          favorite: Value(favorite),
-        ),
-      );
-    }
-  }
+  Future<void> setFavorite(int mediaId, bool favorite) => upsertState(
+    MediaStatesCompanion.insert(
+      mediaId: Value(mediaId),
+      favorite: Value(favorite),
+    ),
+  );
 
-  Future<void> setHidden(int mediaId, bool hidden) async {
-    final existing = await getState(mediaId);
-    if (existing != null) {
-      await update(mediaStates).replace(existing.copyWith(hidden: hidden));
-    } else {
-      await into(mediaStates).insert(
-        MediaStatesCompanion.insert(
-          mediaId: Value(mediaId),
-          hidden: Value(hidden),
-        ),
-      );
-    }
-  }
+  Future<void> setHidden(int mediaId, bool hidden) => upsertState(
+    MediaStatesCompanion.insert(mediaId: Value(mediaId), hidden: Value(hidden)),
+  );
 
-  Future<void> updatePosition(int mediaId, int positionMs) async {
-    final existing = await getState(mediaId);
-    if (existing != null) {
-      await update(mediaStates).replace(
-        existing.copyWith(
-          lastPosition: Value(positionMs),
-          lastPlayedAt: Value(DateTime.now()),
-        ),
-      );
-    } else {
-      await into(mediaStates).insert(
-        MediaStatesCompanion.insert(
-          mediaId: Value(mediaId),
-          lastPosition: Value(positionMs),
-          lastPlayedAt: Value(DateTime.now()),
-        ),
-      );
-    }
-  }
+  Future<void> updatePosition(int mediaId, int positionMs) => upsertState(
+    MediaStatesCompanion.insert(
+      mediaId: Value(mediaId),
+      lastPosition: Value(positionMs),
+      lastPlayedAt: Value(DateTime.now()),
+    ),
+  );
 
   Future<void> incrementPlayCount(int mediaId) async {
-    final existing = await getState(mediaId);
-    if (existing != null) {
-      await update(mediaStates).replace(
-        existing.copyWith(
-          playCount: existing.playCount + 1,
-          lastPlayedAt: Value(DateTime.now()),
+    await into(mediaStates).insert(
+      MediaStatesCompanion.insert(
+        mediaId: Value(mediaId),
+        playCount: const Value(1),
+        lastPlayedAt: Value(DateTime.now()),
+      ),
+      onConflict: DoUpdate(
+        (old) => MediaStatesCompanion.custom(
+          playCount: old.playCount + const Constant(1),
+          lastPlayedAt: Variable(DateTime.now()),
         ),
-      );
-    } else {
-      await into(mediaStates).insert(
-        MediaStatesCompanion.insert(
-          mediaId: Value(mediaId),
-          playCount: const Value(1),
-          lastPlayedAt: Value(DateTime.now()),
-        ),
-      );
-    }
+      ),
+    );
   }
 
   Future<Set<int>> getHiddenMediaIds() async {

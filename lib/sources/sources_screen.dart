@@ -46,7 +46,7 @@ class SourcesScreen extends StatelessWidget {
                           ),
                           title: Text(source.name),
                           subtitle: Text(
-                            '${source.lastKnownPath}\n${manager.allMedia.where((m) => m.sourceId == source.id).length} 个视频',
+                            '${source.lastKnownPath}\n${manager.allMedia.where((m) => m.sourceId == source.id).length} 个媒体',
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -54,6 +54,12 @@ class SourcesScreen extends StatelessWidget {
                           trailing: PopupMenuButton<String>(
                             enabled: !manager.isScanning,
                             onSelected: (action) async {
+                              if (action == 'recursive') {
+                                await manager.setRecursive(
+                                  source.id,
+                                  !source.recursive,
+                                );
+                              }
                               if (action == 'scan') {
                                 await manager.scanSource(source);
                               }
@@ -89,7 +95,13 @@ class SourcesScreen extends StatelessWidget {
                                 }
                               }
                             },
-                            itemBuilder: (_) => const [
+                            itemBuilder: (_) => [
+                              PopupMenuItem(
+                                value: 'recursive',
+                                child: Text(
+                                  source.recursive ? '关闭子目录扫描' : '开启子目录扫描',
+                                ),
+                              ),
                               PopupMenuItem(value: 'scan', child: Text('重新扫描')),
                               PopupMenuItem(
                                 value: 'authorize',

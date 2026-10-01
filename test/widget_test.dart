@@ -53,11 +53,11 @@ void main() {
       ),
     );
     await tester.drag(find.byType(FeedGestureHandler), const Offset(0, -200));
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
     expect(next, 1);
     expect(previous, 0);
     await tester.drag(find.byType(FeedGestureHandler), const Offset(0, 200));
-    await tester.pump(const Duration(milliseconds: 400));
+    await tester.pumpAndSettle();
     expect(previous, 1);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
     expect(next, 2);

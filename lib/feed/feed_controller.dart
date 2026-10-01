@@ -1,5 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
+import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
 import 'package:media_kit_video/media_kit_video.dart';
@@ -11,9 +13,17 @@ import '../player/player_pool.dart';
 import '../player/player_service.dart';
 import '../player/media_kit_player.dart';
 import '../queue/queue_engine.dart';
+import '../queue/queue_order.dart';
+import '../sources/scanner.dart';
+import '../sources/platform/storage_bridge.dart';
+import 'playback_error_log.dart';
 import '../settings/settings.dart';
 import '../sources/source.dart';
 import '../sources/source_manager.dart';
+
+part 'feed_playback.dart';
+part 'feed_images.dart';
+part 'feed_actions.dart';
 
 class FeedController extends ChangeNotifier {
   final QueueEngine queue;
@@ -26,10 +36,26 @@ class FeedController extends ChangeNotifier {
   Set<int> _hidden = {}, _favorites = {};
   final Set<int> _failed = {};
   String? lastPlaybackError;
+  final errorLog = PlaybackErrorLog();
+  Uint8List? imageBytes;
+  Timer? _imageClock;
+  double _imageRate = 1;
+  String _order = 'shuffle';
+  bool _includeImages = false;
+  bool _preloadSetting = true;
+  double _volumeSetting = 1;
+  bool _driveSetting = true;
+  bool get isImage =>
+      currentMedia != null &&
+      SourceScanner.imageExtensions.contains(currentMedia!.extension);
   List<HiddenRuleEntry> _rules = [];
   Future<void> _pending = Future.value();
+  Future<void> _positionWrites = Future.value();
   bool _disposed = false, _ready = false, _showInfo = true;
-  int _revision = -1, _positionSaved = -1;
+  int _revision = -1, _positionSaved = -1, _positionNotified = -1;
+  int? _openedMediaId;
+  bool _completed = false;
+  Future<void>? _closing;
   String? _path;
   String? error;
   bool busy = false, muted = false, fullscreen = false;
@@ -39,6 +65,7 @@ class FeedController extends ChangeNotifier {
   bool _isScrubbing = false;
   Duration? _scrubTarget;
   bool _seekInProgress = false;
+  Future<void> _scrubSeek = Future.value();
 
   bool get isScrubbing => _isScrubbing;
 
@@ -51,6 +78,9 @@ class FeedController extends ChangeNotifier {
   }) : queue = queue ?? QueueEngine(),
        pool = pool ?? PlayerPool(),
        settings = settings ?? AppSettings();
+
+  String folderScope(Media media) =>
+      'folder:${media.sourceId}:${p.posix.dirname(media.relativePath.replaceAll('\\', '/'))}';
 
   int? get currentMediaId => queue.currentId;
   Media? get currentMedia => _media[currentMediaId];
@@ -70,7 +100,10 @@ class FeedController extends ChangeNotifier {
   bool get showInfo => _showInfo;
   String get videoFit => settings.videoFit;
   PlayerService? get player => pool.currentPlayer;
-  Future<void> get settled => _pending;
+  Future<void> get settled async {
+    await _pending;
+    await _positionWrites;
+  }
 
   void _notify() {
     if (!_disposed) notifyListeners();
@@ -91,6 +124,18 @@ class FeedController extends ChangeNotifier {
 
   Future<void> initialize() => _run(() async {
     await pool.initialize();
+    _order = settings.queueOrder;
+    _includeImages = settings.includeImages;
+    _preloadSetting = settings.preloadNext;
+    _volumeSetting = settings.defaultVolume;
+    _driveSetting = settings.externalDriveOptimization;
+    await errorLog.load(
+      settings.file == null
+          ? null
+          : File('${settings.file!.parent.path}/playback-errors.json'),
+    );
+    queue.orderer = (ids, random) =>
+        orderMedia(ids, _media, settings.queueOrder, random);
     if (store != null) {
       _favorites = await store!.db.stateDao.getFavoriteIds();
       _hidden = await store!.db.stateDao.getHiddenMediaIds();
@@ -107,7 +152,7 @@ class FeedController extends ChangeNotifier {
         queue.buildQueue([]);
       }
     }
-    queue.reconcile(_eligible());
+    _reconcileQueue();
     _ready = true;
     sourceManager?.addListener(_sourcesChanged);
     settings.addListener(_settingsChanged);
@@ -124,6 +169,10 @@ class FeedController extends ChangeNotifier {
 
   List<int> _eligible() => _media.values
       .where((m) {
+        if (!settings.includeImages &&
+            SourceScanner.imageExtensions.contains(m.extension)) {
+          return false;
+        }
         if (_hidden.contains(m.id) || _failed.contains(m.id)) return false;
         final source = sourceManager?.getSourceForMedia(m);
         if (source != null && !source.enabled) return false;
@@ -132,6 +181,15 @@ class FeedController extends ChangeNotifier {
           return false;
         }
         final path = m.relativePath.replaceAll('\\', '/');
+        if (scope.startsWith('folder:')) {
+          final boundary = scope.indexOf(':', 7);
+          if (boundary < 0 ||
+              int.tryParse(scope.substring(7, boundary)) != m.sourceId) {
+            return false;
+          }
+          final folder = scope.substring(boundary + 1);
+          if (folder != '.' && !path.startsWith('$folder/')) return false;
+        }
         return !_rules.any((r) {
           if (r.sourceId != m.sourceId) return false;
           final folder = r.relativePath.replaceAll('\\', '/');
@@ -144,14 +202,26 @@ class FeedController extends ChangeNotifier {
       .map((m) => m.id)
       .toList();
 
+  void _reconcileQueue({bool sortPending = false}) {
+    queue.reconcile(_eligible(), reorderPending: sortPending);
+    if (queue.currentId == null &&
+        queue.queue.isNotEmpty &&
+        settings.loopQueue) {
+      queue.buildQueue(_eligible());
+    }
+  }
+
   void _sourcesChanged() {
     if (!_ready || _revision == sourceManager?.revision) return;
     _run(() async {
       final previous = currentMediaId;
       _failed.clear();
       _refreshMedia();
-      queue.reconcile(_eligible());
+      _reconcileQueue(
+        sortPending: ['newest', 'oldest'].contains(settings.queueOrder),
+      );
       if (previous != currentMediaId || _path == null) {
+        await _savePosition();
         await _open();
       } else {
         await _saveSession();
@@ -160,8 +230,38 @@ class FeedController extends ChangeNotifier {
   }
 
   void _settingsChanged() {
+    if (_order != settings.queueOrder ||
+        _includeImages != settings.includeImages) {
+      _order = settings.queueOrder;
+      _includeImages = settings.includeImages;
+      _run(() async {
+        await _savePosition();
+        queue.buildQueue(_eligible());
+        await _open();
+      });
+    }
     sourceManager?.recursive = settings.recursiveScan;
-    player?.setVolume(muted ? 0 : settings.defaultVolume);
+    final releaseNext = _preloadSetting && !settings.preloadNext;
+    final changedPlayback =
+        _volumeSetting != settings.defaultVolume ||
+        _driveSetting != settings.externalDriveOptimization ||
+        releaseNext;
+    _preloadSetting = settings.preloadNext;
+    _volumeSetting = settings.defaultVolume;
+    _driveSetting = settings.externalDriveOptimization;
+    if (changedPlayback) {
+      _run(() async {
+        await player?.setVolume(muted ? 0 : settings.defaultVolume);
+        if (player is MediaKitPlayerService) {
+          await (player as MediaKitPlayerService).setDriveOptimization(
+            settings.externalDriveOptimization,
+          );
+        }
+        if (releaseNext && pool.nextPlayer is MediaKitPlayerService) {
+          await (pool.nextPlayer as MediaKitPlayerService).releaseMedia();
+        }
+      });
+    }
     _notify();
   }
 
@@ -169,142 +269,15 @@ class FeedController extends ChangeNotifier {
     if (store == null) return;
     await store!.db.transaction(() async {
       await store!.db.delete(store!.db.sessions).go();
-      await store!.db.sessionDao.saveSession(SessionsCompanion.insert(
-        scope: scope,
-        queue: jsonEncode(queue.queue),
-        currentIndex: queue.currentIndex,
-        createdAt: DateTime.now(),
-      ));
-    });
-  }
-
-  Future<void> _savePosition() async {
-    final id = currentMediaId;
-    if (id != null && _path != null && store != null) {
-      await store!.db.stateDao.updatePosition(id, position.inMilliseconds);
-    }
-  }
-
-  Future<void> _unbind() async {
-    for (final sub in _subscriptions) {
-      await sub.cancel();
-    }
-    _subscriptions.clear();
-  }
-
-  void _bind() {
-    final active = player;
-    if (active == null) return;
-    _subscriptions.addAll([
-      active.positionStream.listen((value) {
-        if (!_isScrubbing) {
-          position = value;
-          final second = value.inSeconds;
-          if (second ~/ 5 != _positionSaved && !busy) {
-            _positionSaved = second ~/ 5;
-            _run(_savePosition);
-          }
-          _notify();
-        }
-      }),
-      active.durationStream.listen((value) {
-        duration = value;
-        _notify();
-      }),
-      active.playingStream.listen((value) {
-        _playing = value;
-        _notify();
-      }),
-      active.completedStream.listen((done) {
-        if (done && !busy) next();
-      }),
-    ]);
-    if (active is MediaKitPlayerService) {
-      _subscriptions.add(
-        active.errors.listen((message) {
-          if (busy) return;
-          _run(() async {
-            await active.pause();
-            await _recover('无法播放 $currentFileName：$message');
-          });
-        }),
+      await store!.db.sessionDao.saveSession(
+        SessionsCompanion.insert(
+          scope: scope,
+          queue: jsonEncode(queue.queue),
+          currentIndex: queue.currentIndex,
+          createdAt: DateTime.now(),
+        ),
       );
-    }
-  }
-
-  Future<void> _recover(String message) async {
-    lastPlaybackError = message;
-    final media = currentMedia;
-    if (media != null && await sourceManager?.isAvailable(media) == true) {
-      _failed.add(media.id);
-      queue.reconcile(_eligible());
-      if (queue.currentId != null) {
-        await _open();
-        return;
-      }
-    }
-    error = message;
-    _path = null;
-    await _saveSession();
-  }
-
-  Future<void> _open() async {
-    busy = true;
-    error = null;
-    _path = null;
-    _playing = false;
-    position = duration = Duration.zero;
-    _positionSaved = -1;
-    _notify();
-    await _unbind();
-    await player?.pause();
-    try {
-      final media = currentMedia;
-      if (media == null) {
-        await _saveSession();
-        return;
-      }
-      final resolved = await sourceManager?.resolveMediaPath(media);
-      if (resolved == null) {
-        await _recover('视频或目录无法访问，请连接磁盘后重试，或重新授权目录。');
-        return;
-      }
-      if (pool.nextPlayer?.currentPath == resolved) {
-        await pool.swap();
-      } else {
-        await player?.open(resolved);
-      }
-      _path = resolved;
-      _bind();
-      position = player?.position ?? Duration.zero;
-      duration = player?.duration ?? Duration.zero;
-      await player?.setVolume(muted ? 0 : settings.defaultVolume);
-      if (settings.rememberPosition) {
-        final state = await store?.db.stateDao.getState(media.id);
-        if ((state?.lastPosition ?? 0) > 0) {
-          await player?.seekTo(Duration(milliseconds: state!.lastPosition!));
-        }
-      }
-      if (settings.autoplay) await player?.play();
-      await store?.db.stateDao.incrementPlayCount(media.id);
-      await _saveSession();
-      final next = _media[queue.nextId];
-      if (next != null) {
-        final nextPath = await sourceManager?.resolveMediaPath(next);
-        if (nextPath != null) {
-          try {
-            await pool.preloadNext(nextPath);
-          } catch (_) {
-            /* 当前视频继续播放。 */
-          }
-        }
-      }
-    } catch (e) {
-      await _recover('视频打开失败：$e');
-    } finally {
-      busy = false;
-      _notify();
-    }
+    });
   }
 
   Future<void> next() => _run(() async {
@@ -312,9 +285,15 @@ class FeedController extends ChangeNotifier {
     if (!queue.advance()) {
       if (!settings.loopQueue || queue.queue.isEmpty) {
         await player?.pause();
+        _pauseImage();
         return;
       }
-      queue.reshuffle();
+      if (settings.reshuffleAfterRound &&
+          ['shuffle', 'smart'].contains(settings.queueOrder)) {
+        queue.reshuffle();
+      } else {
+        queue.restart();
+      }
     }
     await _open();
   });
@@ -330,8 +309,9 @@ class FeedController extends ChangeNotifier {
     await _open();
   });
   Future<void> retry() => _run(() async {
+    await _savePosition();
     _failed.clear();
-    queue.reconcile(_eligible());
+    _reconcileQueue();
     await _open();
   });
   Future<void> setScope(String value) => _run(() async {
@@ -342,8 +322,15 @@ class FeedController extends ChangeNotifier {
   });
   Future<void> togglePlayPause() => _run(() async {
     if (_path == null) return;
+    if (imageBytes != null) {
+      _playing = !_playing;
+      _startImageClock();
+      await _savePosition();
+      return;
+    }
     if (player!.isPlaying) {
       await player!.pause();
+      await _savePosition();
     } else {
       await player!.play();
     }
@@ -355,7 +342,9 @@ class FeedController extends ChangeNotifier {
     );
     position = clamped;
     _notify();
-    await player?.seekTo(clamped);
+    if (imageBytes == null) await player?.seekTo(clamped);
+    _completed = false;
+    await _savePosition(clamped);
   });
 
   void startScrub() {
@@ -370,7 +359,7 @@ class FeedController extends ChangeNotifier {
     _scrubTarget = clamped;
     position = clamped;
     _notify();
-    _dispatchThrottledSeek();
+    if (imageBytes == null) _dispatchThrottledSeek();
   }
 
   void _dispatchThrottledSeek() {
@@ -378,105 +367,59 @@ class FeedController extends ChangeNotifier {
     final target = _scrubTarget!;
     _scrubTarget = null;
     _seekInProgress = true;
-    player?.seekTo(target).whenComplete(() {
-      _seekInProgress = false;
-      if (_scrubTarget != null) {
-        _dispatchThrottledSeek();
-      }
-    });
+    final active = player!;
+    _scrubSeek = active
+        .seekTo(target)
+        .catchError((Object e) {
+          error = '跳转失败：$e';
+        })
+        .whenComplete(() {
+          _seekInProgress = false;
+          if (_isScrubbing &&
+              identical(player, active) &&
+              _scrubTarget != null) {
+            _dispatchThrottledSeek();
+          }
+        });
   }
 
-  Future<void> endScrub([Duration? finalTarget]) async {
+  Future<void> endScrub([Duration? finalTarget]) {
     _isScrubbing = false;
     final target = finalTarget ?? _scrubTarget ?? position;
     _scrubTarget = null;
-    if (_path != null) {
-      final clamped = Duration(
-        milliseconds: target.inMilliseconds.clamp(0, duration.inMilliseconds),
-      );
-      position = clamped;
-      await player?.seekTo(clamped);
-    }
-    _notify();
+    return _run(() async {
+      await _scrubSeek;
+      if (_path != null) {
+        final clamped = Duration(
+          milliseconds: target.inMilliseconds.clamp(0, duration.inMilliseconds),
+        );
+        position = clamped;
+        if (imageBytes == null) await player?.seekTo(clamped);
+        _completed = false;
+        await _savePosition(clamped);
+      }
+    });
   }
 
   void seekForward({Duration amount = const Duration(seconds: 5)}) =>
       seekTo(position + amount);
   void seekBackward({Duration amount = const Duration(seconds: 5)}) =>
       seekTo(position - amount);
-  Future<void> toggleFavorite() => _run(() async {
-    final id = currentMediaId;
-    if (id == null) return;
-    final favorite = !_favorites.contains(id);
-    await store?.db.stateDao.setFavorite(id, favorite);
-    if (favorite) {
-      _favorites.add(id);
-    } else {
-      _favorites.remove(id);
-    }
-    if (scope == 'favorites' && !favorite) {
-      queue.reconcile(_eligible());
-      await _open();
-    }
-  });
-  Future<void> hideCurrentVideo() => _run(() async {
-    final id = currentMediaId;
-    if (id == null) return;
-    await store?.db.stateDao.setHidden(id, true);
-    _hidden.add(id);
-    queue.reconcile(_eligible());
-    await _open();
-  });
-  Future<void> hideCurrentFolder() => _run(() async {
-    final media = currentMedia;
-    if (media == null || store == null) return;
-    await store!.hideFolder(media.sourceId, p.dirname(media.relativePath));
-    _rules = await store!.rules();
-    queue.reconcile(_eligible());
-    await _open();
-  });
-  Future<void> resetHidden() => _run(() async {
-    await store?.resetHidden();
-    _hidden.clear();
-    _rules.clear();
-    queue.reconcile(_eligible());
-    await _open();
-  });
-  void toggleInfo() {
-    _showInfo = !_showInfo;
-    _notify();
-  }
-
-  void toggleOverlay() => toggleInfo();
-  void cycleVideoFit() {
-    final next = switch (videoFit) { 'fit' => 'fill', 'fill' => 'original', _ => 'fit' };
-    settings.update(videoFit: next);
-  }
-  Future<void> toggleFullscreen() => _run(() async {
-    fullscreen ? await defaultExitNativeFullscreen() : await defaultEnterNativeFullscreen();
-    fullscreen = !fullscreen;
-  });
-  void exitFullscreen() {
-    if (fullscreen) toggleFullscreen();
-  }
-
-  void setSpeed(double rate) {
-    final active = player;
-    if (active is MediaKitPlayerService) _run(() => active.setRate(rate));
-  }
-
-  Future<void> toggleMute() => _run(() async {
-    muted = !muted;
-    await player?.setVolume(muted ? 0 : settings.defaultVolume);
-  });
   Future<void> suspend() => _run(() async {
-    await _savePosition();
     await player?.pause();
+    _pauseImage();
+    await _savePosition();
   });
-  Future<void> close() async {
+  Future<void> close() => _closing ??= _close();
+
+  Future<void> _close() async {
     sourceManager?.removeListener(_sourcesChanged);
     settings.removeListener(_settingsChanged);
     await _pending;
+    _pauseImage();
+    await errorLog.flushed;
+    _disposed = true;
+    await player?.pause();
     await _savePosition();
     await _unbind();
     await pool.dispose();
