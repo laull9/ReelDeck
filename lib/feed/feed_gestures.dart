@@ -69,6 +69,7 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
   late final AnimationController _animController;
   Animation<double>? _slideAnimation;
   bool _switching = false;
+  double _viewportHeight = 800;
 
   double _dragOffset = 0.0;
   double _horizontalDrag = 0.0;
@@ -97,9 +98,13 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
   }
 
   Future<void> _animateSlideFrom(double initialOffset) async {
+    await _animateSlide(initialOffset, 0);
+  }
+
+  Future<void> _animateSlide(double initialOffset, double targetOffset) async {
     if (!mounted) return;
     if (!widget.animations) {
-      setState(() => _dragOffset = 0);
+      setState(() => _dragOffset = targetOffset);
       return;
     }
     _animController.stop();
@@ -107,7 +112,7 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
     _dragOffset = initialOffset;
     _slideAnimation = Tween<double>(
       begin: initialOffset,
-      end: 0,
+      end: targetOffset,
     ).chain(CurveTween(curve: Curves.easeOutCubic)).animate(_animController);
     try {
       await _animController.forward(from: 0).orCancel;
@@ -117,7 +122,7 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
     if (mounted) {
       setState(() {
         _isAnimating = false;
-        _dragOffset = 0;
+        _dragOffset = targetOffset;
       });
     }
   }
@@ -125,14 +130,20 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
   Future<void> _switch(bool next) async {
     if (_switching || _isAnimating) return;
     _switching = true;
-    // 打开期间停止展示预览，等真实播放画面准备好再做入场动画。
-    setState(() => _dragOffset = 0);
     try {
+      // 只移动旧画面。打开回调包含后台预加载，不能在它结束后再移动新视频。
+      if (widget.animations) {
+        await _animateSlide(
+          _dragOffset,
+          next ? -_viewportHeight : _viewportHeight,
+        );
+      }
+      if (!mounted) return;
+      setState(() {
+        _dragOffset = 0;
+      });
       final result = next ? widget.onNext() : widget.onPrevious();
       if (result is Future<void>) await result;
-      if (mounted && widget.animations) {
-        await _animateSlideFrom(next ? 48 : -48);
-      }
     } finally {
       _switching = false;
     }
@@ -235,6 +246,7 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
             constraints.maxHeight.isFinite && constraints.maxHeight > 0
             ? constraints.maxHeight
             : 800.0;
+        _viewportHeight = height;
 
         return Focus(
           focusNode: _focusNode,
@@ -250,7 +262,9 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
               behavior: HitTestBehavior.opaque,
               onVerticalDragStart: (_) {},
               onVerticalDragCancel: () {
-                if (!_switching) _animateSlideFrom(_dragOffset);
+                if (!_switching && !_isAnimating) {
+                  _animateSlideFrom(_dragOffset);
+                }
               },
               onVerticalDragUpdate: (details) {
                 if (_isAnimating || _switching) return;

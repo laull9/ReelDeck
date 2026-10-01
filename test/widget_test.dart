@@ -60,7 +60,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(previous, 1);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
-    expect(next, 2);
     await tester.pumpAndSettle();
+    expect(next, 2);
   });
 }

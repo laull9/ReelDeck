@@ -183,6 +183,7 @@ void main() {
 
       // 原默认 Space 不再是暂停，而是自定义为下一个
       await tester.sendKeyEvent(LogicalKeyboardKey.space);
+      await tester.pumpAndSettle();
       expect(nextCount, 1);
       expect(paused, 1);
 

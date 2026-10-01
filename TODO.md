@@ -20,7 +20,7 @@
 - [ ] Android ARM64 / ARMv7 真机：SAF 授权重启、图片 / GIF、H.264 / HEVC、4K、不同分辨率切换、后台 Surface 恢复、CPU、丢帧与内存。
 - [ ] 本机 NDK 28.2.13676358 安装不完整，仍需修复；本地验证使用已安装完整的 27.1.12297006。CI 保持 Flutter 默认版本。
 - [ ] 本机 API 37 模拟器此前出现 libmpv EGL_BAD_ATTRIBUTE（上游 #1343），不能把该模拟器运行当作原生画面通过。
-- [ ] 配置稳定 Android 发布密钥；当前本地 APK 使用测试签名。
+- [x] 配置稳定 Android 发布密钥；v0.3.0 起 CI 使用固定密钥。此前本地 APK 使用测试签名。
 - [x] GitHub Actions 全矩阵终态及产物校验记录，见 [构建验收](docs/verification.md)。
 
 ## 后续设计研究
