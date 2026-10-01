@@ -7,7 +7,7 @@
 | 目标 | Runner | 输出 |
 | --- | --- | --- |
 | Windows x64 | windows-2022 | zip |
-| Windows ARM64 | windows-2022，MSVC ARM64 交叉编译 | zip |
+| Windows ARM64 | windows-11-arm，原生 ARM64 SDK | zip |
 | Linux x64 | ubuntu-24.04 | deb、rpm |
 | Linux ARM64 | ubuntu-24.04-arm | deb、rpm |
 | macOS x64 | macos-15-intel | zip |
@@ -33,7 +33,7 @@ python3 scripts/verify_arch.py build/linux/arm64/release/bundle arm64
 python3 scripts/package_linux.py --bundle build/linux/arm64/release/bundle --arch arm64 --version 0.3.0
 ```
 
-Windows x64 运行 `flutter build windows --release --target-platform windows-x64`。ARM64 需要 MSVC ARM64 编译工具，在同一 PowerShell 中先运行 `scripts/prepare_windows_arm64.ps1`，再运行 `flutter build windows --release --target-platform windows-arm64`。本地 Windows 播放库按目标下载 libmpv；ARM64 ANGLE 从固定 vcpkg 提交编译。详细约定见 [依赖说明](../vendor/media_kit_libs_windows_video/README.md)。
+Windows 运行 `flutter build windows --release`，目标由 Dart SDK 架构决定。ARM64 使用原生 Windows ARM64、ARM64 Dart SDK 和 MSVC ARM64 编译工具，在同一 PowerShell 中先运行 `scripts/prepare_windows_arm64.ps1`，再构建。工作流在编译前验证 Dart SDK 架构。本地 Windows 播放库按目标下载 libmpv；ARM64 ANGLE 从固定 vcpkg 提交编译。详细约定见 [依赖说明](../vendor/media_kit_libs_windows_video/README.md)。
 
 ## Android 签名
 

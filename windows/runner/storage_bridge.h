@@ -4,6 +4,7 @@
 #include <flutter/standard_method_codec.h>
 #include <windows.h>
 #include <shobjidl.h>
+#include <shlobj.h>
 #include <string>
 
 namespace storage {
@@ -106,7 +107,7 @@ inline void Register(flutter::BinaryMessenger* messenger, HWND window) {
         hr = CoCreateInstance(CLSID_FileOperation, nullptr, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&operation));
         if (SUCCEEDED(hr)) {
           operation->SetOwnerWindow(window);
-          hr = operation->SetOperationFlags(FOF_ALLOWUNDO | FOFX_RECYCLEONDELETE | FOF_NOCONFIRMATION | FOF_NOERRORUI);
+          hr = operation->SetOperationFlags(FOF_ALLOWUNDO | FOFX_RECYCLEONDELETE | FOFX_EARLYFAILURE | FOF_WANTNUKEWARNING | FOF_NOCONFIRMATION | FOF_NOERRORUI);
           if (SUCCEEDED(hr)) hr = operation->DeleteItem(item, nullptr);
           if (SUCCEEDED(hr)) hr = operation->PerformOperations();
           BOOL aborted = FALSE;
