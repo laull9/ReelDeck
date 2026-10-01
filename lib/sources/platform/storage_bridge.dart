@@ -26,4 +26,10 @@ class StorageBridge {
 
   static Future<String?> media(String locator, String path) =>
       channel.invokeMethod<String>('media', {'locator': locator, 'path': path});
+
+  static Future<void> fileAction(String action, String locator, String path) =>
+      channel.invokeMethod<void>(action, {'locator': locator, 'path': path});
+
+  static Future<Uint8List?> readImage(String uri) =>
+      channel.invokeMethod<Uint8List>('readImage', {'uri': uri});
 }

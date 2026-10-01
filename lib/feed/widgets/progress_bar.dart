@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 class FeedProgressBar extends StatefulWidget {
+  final bool animations;
   final Duration position;
   final Duration duration;
   final ValueChanged<Duration>? onSeek;
@@ -10,6 +11,7 @@ class FeedProgressBar extends StatefulWidget {
 
   const FeedProgressBar({
     super.key,
+    this.animations = true,
     required this.position,
     required this.duration,
     this.onSeek,
@@ -94,7 +96,9 @@ class _FeedProgressBarState extends State<FeedProgressBar> {
                 children: [
                   // 基础进度条轨道（包含背景与高亮）
                   AnimatedContainer(
-                    duration: const Duration(milliseconds: 150),
+                    duration: widget.animations
+                        ? const Duration(milliseconds: 150)
+                        : Duration.zero,
                     height: isInteractive ? 6 : 3,
                     width: double.infinity,
                     clipBehavior: Clip.antiAlias,
@@ -115,7 +119,9 @@ class _FeedProgressBarState extends State<FeedProgressBar> {
                         .clamp(0.0, (width.isFinite ? width - 12 : 0.0)),
                     child: AnimatedScale(
                       scale: isInteractive ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 150),
+                      duration: widget.animations
+                          ? const Duration(milliseconds: 150)
+                          : Duration.zero,
                       curve: Curves.easeOutBack,
                       child: Container(
                         width: 12,

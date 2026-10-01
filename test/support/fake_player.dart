@@ -6,6 +6,7 @@ class FakePlayerService implements PlayerService {
   String? _path;
   double volume = 1;
   int opens = 0;
+  final List<Duration> openedPositions = [];
   bool failOpen = false;
   bool _isPlaying = false;
   Duration _position = Duration.zero;
@@ -41,10 +42,12 @@ class FakePlayerService implements PlayerService {
   Stream<bool> get completedStream => _completedController.stream;
 
   @override
-  Future<void> open(String path) async {
+  Future<void> open(String path, {Duration start = Duration.zero}) async {
     opens++;
+    openedPositions.add(start);
     if (failOpen) throw StateError('损坏的视频');
-    _position = Duration.zero;
+    _position = start;
+    _isPlaying = false;
     _path = path;
   }
 

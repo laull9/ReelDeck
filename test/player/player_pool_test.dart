@@ -40,8 +40,9 @@ class FakePlayerService implements PlayerService {
   Stream<bool> get completedStream => _completedController.stream;
 
   @override
-  Future<void> open(String path) async {
+  Future<void> open(String path, {Duration start = Duration.zero}) async {
     _path = path;
+    _position = start;
   }
 
   @override
@@ -75,6 +76,25 @@ class FakePlayerService implements PlayerService {
 }
 
 void main() {
+  test('单播放器模式不创建或打开预加载解码器', () async {
+    var created = 0;
+    final pool = PlayerPool(
+      preloadEnabled: false,
+      playerFactory: () {
+        created++;
+        return FakePlayerService();
+      },
+    );
+    await pool.initialize();
+    await pool.playMedia('current.mp4');
+    await pool.preloadNext('next.mp4');
+    await pool.swap();
+    expect(created, 1);
+    expect(pool.nextPlayer, isNull);
+    expect(pool.currentPlayer!.currentPath, 'current.mp4');
+    await pool.dispose();
+  });
+
   test('PlayerPool initialization and advanceToNext logic', () async {
     final pool = PlayerPool(playerFactory: FakePlayerService.new);
     expect(pool.currentPlayer, isNull);
@@ -93,6 +113,7 @@ void main() {
     expect(pool.currentPlayer, equals(initialNext));
     expect(pool.nextPlayer, equals(initialCurrent));
     expect(pool.currentPlayer?.isPlaying, isTrue);
+    await pool.dispose();
   });
 
   test('PlayerPool goToPrevious logic', () async {
@@ -108,5 +129,6 @@ void main() {
     expect(pool.nextPlayer, equals(initialCurrent));
     expect(pool.currentPlayer?.currentPath, equals('test_path.mp4'));
     expect(pool.currentPlayer?.isPlaying, isTrue);
+    await pool.dispose();
   });
 }

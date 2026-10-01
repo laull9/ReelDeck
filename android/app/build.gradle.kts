@@ -1,13 +1,21 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
 }
 
+val releaseProperties = Properties()
+val releasePropertiesFile = rootProject.file("key.properties")
+if (releasePropertiesFile.exists()) {
+    releasePropertiesFile.inputStream().use { releaseProperties.load(it) }
+}
+
 android {
     namespace = "com.reeldeck.reel_deck"
     compileSdk = 36
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = providers.gradleProperty("reeldeckNdkVersion").getOrElse(flutter.ndkVersion)
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -29,11 +37,22 @@ android {
         versionName = flutter.versionName
     }
 
+    signingConfigs {
+        if (releasePropertiesFile.exists()) {
+            create("release") {
+                keyAlias = releaseProperties.getProperty("keyAlias")
+                keyPassword = releaseProperties.getProperty("keyPassword")
+                storeFile = rootProject.file(releaseProperties.getProperty("storeFile"))
+                storePassword = releaseProperties.getProperty("storePassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName(
+                if (releasePropertiesFile.exists()) "release" else "debug"
+            )
         }
     }
 }

@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
+
 import '../shortcuts/shortcut_action.dart';
 import '../shortcuts/shortcut_binding.dart';
 
@@ -12,9 +13,19 @@ class AppSettings extends ChangeNotifier {
   String? error;
 
   bool autoplay = true;
+  String queueOrder = 'shuffle';
+  bool reshuffleAfterRound = true;
+  bool includeImages = false;
+  int imageSeconds = 8;
+  String overlayMode = 'full';
+  bool animations = true;
+  bool doubleTapFavorite = true;
+  bool keyboardEnabled = true;
+  bool preloadNext = true;
+  bool externalDriveOptimization = true;
   bool loopQueue = true;
   String videoFit = 'fit';
-  bool rememberPosition = false;
+  bool rememberPosition = true;
   double defaultVolume = 1.0;
   bool recursiveScan = true;
   bool showFilename = true;
@@ -32,10 +43,27 @@ class AppSettings extends ChangeNotifier {
       final data =
           jsonDecode(await target.readAsString()) as Map<String, dynamic>;
       autoplay = data['autoplay'] as bool? ?? true;
+      queueOrder = data['queueOrder'] as String? ?? 'shuffle';
+      if (!['shuffle', 'smart', 'newest', 'oldest'].contains(queueOrder)) {
+        queueOrder = 'shuffle';
+      }
+      reshuffleAfterRound = data['reshuffleAfterRound'] as bool? ?? true;
+      includeImages = data['includeImages'] as bool? ?? false;
+      imageSeconds = (data['imageSeconds'] as int? ?? 8).clamp(1, 300);
+      overlayMode = data['overlayMode'] as String? ?? 'full';
+      if (!['full', 'progress', 'none'].contains(overlayMode)) {
+        overlayMode = 'full';
+      }
+      animations = data['animations'] as bool? ?? true;
+      doubleTapFavorite = data['doubleTapFavorite'] as bool? ?? true;
+      keyboardEnabled = data['keyboardEnabled'] as bool? ?? true;
+      preloadNext = data['preloadNext'] as bool? ?? true;
+      externalDriveOptimization =
+          data['externalDriveOptimization'] as bool? ?? true;
       loopQueue = data['loopQueue'] as bool? ?? true;
       videoFit = data['videoFit'] as String? ?? 'fit';
       if (!['fit', 'fill', 'original'].contains(videoFit)) videoFit = 'fit';
-      rememberPosition = data['rememberPosition'] as bool? ?? false;
+      rememberPosition = data['rememberPosition'] as bool? ?? true;
       defaultVolume = (data['defaultVolume'] as num? ?? 1).toDouble().clamp(
         0,
         1,
@@ -51,10 +79,9 @@ class AppSettings extends ChangeNotifier {
         final map = data['shortcuts'] as Map<String, dynamic>;
         final parsed = <ShortcutAction, List<ShortcutBinding>>{};
         for (final entry in map.entries) {
-          final action = ShortcutAction.values.cast<ShortcutAction?>().firstWhere(
-            (a) => a?.name == entry.key,
-            orElse: () => null,
-          );
+          final action = ShortcutAction.values
+              .cast<ShortcutAction?>()
+              .firstWhere((a) => a?.name == entry.key, orElse: () => null);
           if (action != null && entry.value is List) {
             parsed[action] = (entry.value as List)
                 .whereType<Map<String, dynamic>>()
@@ -63,7 +90,8 @@ class AppSettings extends ChangeNotifier {
           }
         }
         for (final action in ShortcutAction.values) {
-          shortcuts[action] = parsed[action] ?? List.from(action.defaultBindings);
+          shortcuts[action] =
+              parsed[action] ?? List.from(action.defaultBindings);
         }
       } else {
         shortcuts = ShortcutAction.createDefaultMap();
@@ -78,6 +106,16 @@ class AppSettings extends ChangeNotifier {
     if (file == null) return;
     final text = jsonEncode({
       'autoplay': autoplay,
+      'queueOrder': queueOrder,
+      'reshuffleAfterRound': reshuffleAfterRound,
+      'includeImages': includeImages,
+      'imageSeconds': imageSeconds,
+      'overlayMode': overlayMode,
+      'animations': animations,
+      'doubleTapFavorite': doubleTapFavorite,
+      'keyboardEnabled': keyboardEnabled,
+      'preloadNext': preloadNext,
+      'externalDriveOptimization': externalDriveOptimization,
       'loopQueue': loopQueue,
       'videoFit': videoFit,
       'rememberPosition': rememberPosition,
@@ -105,6 +143,16 @@ class AppSettings extends ChangeNotifier {
 
   void update({
     bool? autoplay,
+    String? queueOrder,
+    bool? reshuffleAfterRound,
+    bool? includeImages,
+    int? imageSeconds,
+    String? overlayMode,
+    bool? animations,
+    bool? doubleTapFavorite,
+    bool? keyboardEnabled,
+    bool? preloadNext,
+    bool? externalDriveOptimization,
     bool? loopQueue,
     String? videoFit,
     bool? rememberPosition,
@@ -117,6 +165,26 @@ class AppSettings extends ChangeNotifier {
     bool? showVideoFormat,
   }) {
     if (autoplay != null) this.autoplay = autoplay;
+    if (queueOrder != null &&
+        ['shuffle', 'smart', 'newest', 'oldest'].contains(queueOrder)) {
+      this.queueOrder = queueOrder;
+    }
+    if (reshuffleAfterRound != null) {
+      this.reshuffleAfterRound = reshuffleAfterRound;
+    }
+    if (includeImages != null) this.includeImages = includeImages;
+    if (imageSeconds != null) this.imageSeconds = imageSeconds.clamp(1, 300);
+    if (overlayMode != null &&
+        ['full', 'progress', 'none'].contains(overlayMode)) {
+      this.overlayMode = overlayMode;
+    }
+    if (animations != null) this.animations = animations;
+    if (doubleTapFavorite != null) this.doubleTapFavorite = doubleTapFavorite;
+    if (keyboardEnabled != null) this.keyboardEnabled = keyboardEnabled;
+    if (preloadNext != null) this.preloadNext = preloadNext;
+    if (externalDriveOptimization != null) {
+      this.externalDriveOptimization = externalDriveOptimization;
+    }
     if (loopQueue != null) this.loopQueue = loopQueue;
     if (videoFit != null) this.videoFit = videoFit;
     if (rememberPosition != null) this.rememberPosition = rememberPosition;

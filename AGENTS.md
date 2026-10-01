@@ -7,7 +7,7 @@
 - 本地数据库: Drift / SQLite (sqlite3_flutter_libs)
 - 状态管理: Provider
 - 文件与目录选择: 原生平台通道 (SAF / Platform Channel)
-- 目标平台: macOS, Windows, Android
+- 目标平台: macOS, Windows, Linux, Android
 
 ## 注意事项
 

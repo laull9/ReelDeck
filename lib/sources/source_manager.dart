@@ -211,6 +211,31 @@ class SourceManager extends ChangeNotifier {
     _notify(changed: true);
   }
 
+  Future<void> setRecursive(int sourceId, bool recursive) async {
+    final index = _sources.indexWhere((s) => s.id == sourceId);
+    if (index < 0 || _isScanning) return;
+    final updated = _sources[index].copyWith(recursive: recursive);
+    _sources[index] = updated;
+    await store?.saveSource(updated);
+    await scanSource(updated);
+  }
+
+  Future<void> fileAction(Media media, String action) async {
+    final original = getSourceForMedia(media);
+    if (original == null) throw StateError('目录已移除');
+    final source = await _resolve(original);
+    if (source == null) throw StateError('目录无法访问');
+    await StorageBridge.fileAction(action, source.locator, media.relativePath);
+    if (action == 'trash') {
+      final items = _mediaBySource[media.sourceId]!
+          .where((m) => m.id != media.id)
+          .toList();
+      await store?.replaceMedia(media.sourceId, items);
+      _mediaBySource[media.sourceId] = items;
+      _notify(changed: true);
+    }
+  }
+
   Future<bool> isAvailable(Media media) async {
     try {
       final original = getSourceForMedia(media);

@@ -3,7 +3,7 @@
 /// Concrete implementations (e.g., media_kit) will implement this interface.
 abstract class PlayerService {
   /// Opens media from the given [path].
-  Future<void> open(String path);
+  Future<void> open(String path, {Duration start = Duration.zero});
 
   /// Starts or resumes playback.
   Future<void> play();

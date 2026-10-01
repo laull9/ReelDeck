@@ -168,7 +168,7 @@ void main() {
       expect(nextCount, 0);
       expect(prevCount, 0);
 
-      // 2. 较大幅度上滑（-180 像素）：触发向上过渡动画，动画完成后触发 onNext
+      // 2. 较大幅度上滑（-180 像素）：旧画面离场后触发 onNext
       await tester.drag(find.text('当前视频内容'), const Offset(0, -180));
       await tester.pumpAndSettle();
       expect(nextCount, 1);

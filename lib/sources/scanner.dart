@@ -18,7 +18,10 @@ class SourceScanner {
     'm2ts',
     'flv',
     'wmv',
+    ...imageExtensions,
   };
+
+  static const imageExtensions = {'jpg', 'jpeg', 'png', 'webp', 'bmp', 'gif'};
 
   /// Scans the directory at [rootPath] for files matching [supportedExtensions].
   ///

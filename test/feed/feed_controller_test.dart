@@ -1,4 +1,7 @@
 import 'dart:io';
+import 'dart:async';
+
+import 'package:flutter/services.dart';
 
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,22 +12,32 @@ import 'package:reel_deck/player/player_pool.dart';
 import 'package:reel_deck/settings/settings.dart';
 import 'package:reel_deck/sources/source.dart';
 import 'package:reel_deck/sources/source_manager.dart';
+import 'package:reel_deck/sources/platform/storage_bridge.dart';
 
 import '../support/fake_player.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
   late Directory folder;
   late AppDatabase db;
   late LibraryStore store;
   late SourceManager sources;
   late FeedController feed;
   late AppSettings settings;
-  Future<FeedController> createFeed() async {
+  Future<FeedController> createFeed({
+    bool preload = true,
+    PlayerPool? pool,
+  }) async {
     final controller = FeedController(
       sourceManager: sources,
       store: store,
       settings: settings,
-      pool: PlayerPool(playerFactory: FakePlayerService.new),
+      pool:
+          pool ??
+          PlayerPool(
+            playerFactory: FakePlayerService.new,
+            preloadEnabled: preload,
+          ),
     );
     await controller.initialize();
     return controller;
@@ -148,4 +161,210 @@ void main() {
     expect(feed.currentMediaId, id);
     expect(feed.isPlaying, false);
   });
+  test('默认恢复进度，切到下一条再返回直接从保存位置打开', () async {
+    final id = feed.currentMediaId!;
+    await feed.seekTo(const Duration(seconds: 23));
+    await feed.next();
+    expect((await db.stateDao.getState(id))!.lastPosition, 23000);
+    await feed.previous();
+    expect(feed.player!.position, const Duration(seconds: 23));
+    expect(
+      (feed.player as FakePlayerService).openedPositions.last,
+      const Duration(seconds: 23),
+    );
+  });
+
+  test('暂停、后台和关闭立即保存，不等待五秒采样', () async {
+    final id = feed.currentMediaId!;
+    await feed.player!.seekTo(const Duration(milliseconds: 1234));
+    await feed.togglePlayPause();
+    expect((await db.stateDao.getState(id))!.lastPosition, 1234);
+    await feed.player!.seekTo(const Duration(milliseconds: 2345));
+    await feed.suspend();
+    expect((await db.stateDao.getState(id))!.lastPosition, 2345);
+    await feed.player!.seekTo(const Duration(milliseconds: 3456));
+    await feed.close();
+    feed = await createFeed();
+    expect(feed.currentMediaId, id);
+    expect(feed.player!.position.inMilliseconds, 3456);
+  });
+
+  test('预加载首帧就使用保存位置，关闭恢复开关后重新打开零位置', () async {
+    final nextId = feed.queue.nextId!;
+    await db.stateDao.updatePosition(nextId, 17000);
+    await feed.retry();
+    final preloaded = feed.pool.nextPlayer as FakePlayerService;
+    expect(preloaded.position.inMilliseconds, 17000);
+    await feed.next();
+    expect(feed.player, same(preloaded));
+    expect(feed.player!.position.inMilliseconds, 17000);
+    settings.update(rememberPosition: false);
+    await feed.previous();
+    await feed.next();
+    expect(feed.player!.position, Duration.zero);
+  });
+
+  test('Android 单播放器模式可连续前后切换并恢复进度', () async {
+    await feed.close();
+    feed = await createFeed(preload: false);
+    final player = feed.player;
+    expect(feed.pool.players, hasLength(1));
+    expect(feed.pool.nextPlayer, isNull);
+    await feed.seekTo(const Duration(seconds: 19));
+    await feed.next();
+    await feed.previous();
+    expect(feed.player, same(player));
+    expect(feed.player!.position.inSeconds, 19);
+  });
+
+  test('播放完毕清零保存位置，重新播放从头开始', () async {
+    settings.update(loopQueue: false);
+    await feed.next();
+    await feed.next();
+    final id = feed.currentMediaId!;
+    await feed.player!.seekTo(const Duration(minutes: 1));
+    (feed.player as FakePlayerService).complete();
+    await Future<void>.delayed(Duration.zero);
+    await feed.settled;
+    expect((await db.stateDao.getState(id))!.lastPosition, 0);
+    await feed.retry();
+    expect(feed.player!.position, Duration.zero);
+  });
+
+  test('进度采样不会写到下一条，位置与收藏和播放次数并发更新不丢失', () async {
+    final first = feed.currentMediaId!;
+    await feed.player!.seekTo(const Duration(seconds: 16));
+    final switching = feed.next();
+    await Future<void>.delayed(Duration.zero);
+    await switching;
+    await feed.settled;
+    expect((await db.stateDao.getState(first))!.lastPosition, 16000);
+    final second = feed.currentMediaId!;
+    await Future.wait([
+      db.stateDao.updatePosition(second, 22000),
+      db.stateDao.setFavorite(second, true),
+      db.stateDao.incrementPlayCount(second),
+    ]);
+    final state = (await db.stateDao.getState(second))!;
+    expect(state.lastPosition, 22000);
+    expect(state.favorite, true);
+    expect(state.playCount, 2);
+  });
+  test('松开拖动等待之前的 seek 完成，最终位置不会被旧跳转覆盖', () async {
+    await feed.close();
+    final slow = SlowSeekPlayer();
+    feed = await createFeed(
+      pool: PlayerPool(preloadEnabled: false, playerFactory: () => slow),
+    );
+    feed.startScrub();
+    feed.scrubTo(const Duration(seconds: 10));
+    feed.scrubTo(const Duration(seconds: 20));
+    final done = feed.endScrub(const Duration(seconds: 25));
+    slow.gate.complete();
+    await done;
+    expect(slow.position.inSeconds, 25);
+    expect(
+      (await db.stateDao.getState(feed.currentMediaId!))!.lastPosition,
+      25000,
+    );
+    expect(slow.seeks, [10, 25]);
+  });
+  test('子目录范围使用路径边界，包含后续新增文件', () async {
+    await Directory('${folder.path}/submarine').create();
+    await File('${folder.path}/submarine/outside.mp4').writeAsString('fixture');
+    await sources.scanSource(sources.sources.first);
+    await feed.settled;
+    await feed.setScope('folder:1:sub');
+    expect(feed.queue.queue, hasLength(2));
+    expect(feed.currentFolder, contains('sub'));
+    await File('${folder.path}/sub/new.mp4').writeAsString('fixture');
+    await sources.scanSource(sources.sources.first);
+    await feed.settled;
+    expect(feed.queue.queue, hasLength(3));
+    expect(
+      feed.queue.queue.map(
+        (id) => sources.allMedia.firstWhere((m) => m.id == id).relativePath,
+      ),
+      everyElement(startsWith('sub/')),
+    );
+  });
+  test('顺序设置立即重建并持久化会话，关闭每轮洗牌保持队列', () async {
+    for (final media in sources.allMedia) {
+      await File('${folder.path}/${media.relativePath}')
+          .setLastModified(DateTime(2026, 1, media.id));
+    }
+    await sources.scanSource(sources.sources.first);
+    settings.update(queueOrder: 'newest', reshuffleAfterRound: false);
+    await feed.settled;
+    expect(
+      feed.currentMediaId,
+      sources.allMedia.map((m) => m.id).reduce((a, b) => a > b ? a : b),
+    );
+    final order = feed.queue.queue;
+    await feed.next();
+    await feed.next();
+    await feed.next();
+    expect(feed.queue.queue, order);
+    expect(feed.queueIndex, 0);
+    await feed.close();
+    feed = await createFeed();
+    expect(feed.queue.queue, order);
+  });
+  test('回收站失败保留索引并恢复播放，过期确认不删除下一条', () async {
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+    messenger.setMockMethodCallHandler(StorageBridge.channel, (call) async {
+      throw PlatformException(code: 'trash', message: '只读磁盘');
+    });
+    addTearDown(
+      () => messenger.setMockMethodCallHandler(StorageBridge.channel, null),
+    );
+    final id = feed.currentMediaId!;
+    await feed.trashCurrent(id);
+    expect(sources.allMedia, hasLength(3));
+    expect(feed.currentMediaId, id);
+    expect(feed.currentPath, isNotNull);
+    expect(feed.error, contains('只读磁盘'));
+    await feed.next();
+    await feed.trashCurrent(id);
+    expect(sources.allMedia, hasLength(3));
+  });
+  test('图片默认过滤，开启后计时、暂停、跳转并保存位置', () async {
+    final bytes = await File('assets/icon/app_icon.png').readAsBytes();
+    await File('${folder.path}/picture.png').writeAsBytes(bytes);
+    await sources.scanSource(sources.sources.first);
+    await feed.settled;
+    expect(feed.queueLength, 3);
+    settings.update(includeImages: true, imageSeconds: 2);
+    await feed.settled;
+    final image = sources.allMedia.firstWhere((m) => m.extension == 'png');
+    feed.queue.restore([image.id], 0);
+    await feed.retry();
+    expect(feed.error, isNull);
+    expect(feed.imageBytes, isNotNull);
+    expect(feed.duration, const Duration(seconds: 2));
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    expect(feed.position, greaterThan(Duration.zero));
+    await feed.togglePlayPause();
+    final paused = feed.position;
+    await Future<void>.delayed(const Duration(milliseconds: 160));
+    expect(feed.position, paused);
+    await feed.seekTo(const Duration(milliseconds: 700));
+    expect((await db.stateDao.getState(image.id))!.lastPosition, 700);
+    settings.update(includeImages: false);
+    await feed.settled;
+    expect(feed.imageBytes, isNull);
+    expect(feed.queueLength, 3);
+  });
+}
+
+class SlowSeekPlayer extends FakePlayerService {
+  final gate = Completer<void>();
+  final seeks = <int>[];
+  @override
+  Future<void> seekTo(Duration position) async {
+    seeks.add(position.inSeconds);
+    if (seeks.length == 1) await gate.future;
+    await super.seekTo(position);
+  }
 }

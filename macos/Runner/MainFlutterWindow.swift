@@ -32,17 +32,43 @@ class MainFlutterWindow: NSWindow {
           guard let locator = args?["locator"] as? String,
                 let data = Data(base64Encoded: locator) else { result(nil); return }
           if let url = self.accessed[locator] {
-            result(["path": url.path, "locator": locator]); return
+            if FileManager.default.fileExists(atPath: url.path) {
+              result(["path": url.path, "locator": locator]); return
+            }
+            url.stopAccessingSecurityScopedResource()
+            self.accessed.removeValue(forKey: locator)
           }
           var stale = false
           let url = try URL(resolvingBookmarkData: data,
             options: [.withSecurityScope, .withoutUI], relativeTo: nil,
             bookmarkDataIsStale: &stale)
           _ = url.startAccessingSecurityScopedResource()
-          self.accessed[locator] = url
           let updated = stale ? try url.bookmarkData(options: .withSecurityScope,
             includingResourceValuesForKeys: nil, relativeTo: nil).base64EncodedString() : locator
+          self.accessed[updated] = url
           result(["path": url.path, "locator": updated])
+        case "reveal", "trash":
+          let args = call.arguments as? [String: Any]
+          guard let locator = args?["locator"] as? String,
+                let relative = args?["path"] as? String,
+                !relative.hasPrefix("/"), !relative.split(separator: "/").contains(".."),
+                let data = Data(base64Encoded: locator) else {
+            result(FlutterError(code: "arguments", message: "文件位置无效", details: nil)); return
+          }
+          var stale = false
+          let root = try URL(resolvingBookmarkData: data,
+            options: [.withSecurityScope, .withoutUI], relativeTo: nil,
+            bookmarkDataIsStale: &stale)
+          let scoped = root.startAccessingSecurityScopedResource()
+          defer { if scoped { root.stopAccessingSecurityScopedResource() } }
+          let file = root.appendingPathComponent(relative)
+          if call.method == "reveal" {
+            NSWorkspace.shared.activateFileViewerSelecting([file])
+          } else {
+            var destination: NSURL?
+            try FileManager.default.trashItem(at: file, resultingItemURL: &destination)
+          }
+          result(nil)
         case "fullscreen":
           self.toggleFullScreen(nil); result(nil)
         default: result(FlutterMethodNotImplemented)

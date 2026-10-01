@@ -1,40 +1,30 @@
-# ReelDeck 开发进度
+# 开发与验收记录
 
-## 已完成 (V1)
-- [x] 项目骨架搭建与 Git 初始化 (Flutter 3.47.5 / macOS, Windows, Android)
-- [x] 数据存储层 (Drift SQLite)
-  - [x] Sources, Media, MediaStates, HiddenRules, Sessions 表定义
-  - [x] SourceDao, MediaDao, StateDao, SessionDao 实现与内存测试
-- [x] 播放器服务层 (media_kit)
-  - [x] PlayerService 接口与流式监听
-  - [x] MediaKitPlayerService 实现
-  - [x] 双播放器 PlayerPool（当前/下一个预加载与切换）
-  - [x] VideoPlayerWidget 封装
-- [x] 目录与视频源扫描 (Sources)
-  - [x] 递归遍历与常见视频格式过滤
-  - [x] 跨平台路径解析器 (DefaultResolver, MacOSResolver 桩)
-  - [x] SourceManager 状态管理与目录选择 (file_picker)
-  - [x] 媒体源管理界面 (SourcesScreen)
-- [x] 随机队列与过滤 (Queue)
-  - [x] Fisher-Yates 真随机打乱算法
-  - [x] 单轮无重复与跨轮防重
-  - [x] 隐藏项与隐藏目录过滤
-- [x] 播放 Feed 界面 (Feed UI)
-  - [x] 垂直滑动手势与触控板支持
-  - [x] 桌面全键盘快捷键绑定 (J/K, H, F, R, 空格, 方向键等)
-  - [x] 浮层信息 (VideoOverlay)、进度条 (ProgressBar)、操作按钮 (ActionButtons)
-  - [x] 空状态提示 (EmptyState) 与源断开提示 (SourceUnavailable)
-- [x] 全局路由与设置
-  - [x] MaterialApp M3 深色主题
-  - [x] 设置界面 (SettingsScreen)
-  - [x] 全局 MultiProvider 状态注入
-- [x] 自动化测试
-  - [x] 数据库重启、扫描更新、队列恢复、播放器状态和手势测试
-  - [x] `flutter analyze` 零问题
-  - [x] `flutter test` 全部通过
+## 已实现
 
-## 待推进（设备验收与后续优化）
-- [ ] 在安装完整 Xcode 的 macOS 机器上完成 release 构建和沙盒权限验收
-- [ ] 在 Android Studio 补齐 NDK 后完成 APK 构建与真实 SAF 设备验收
-- [ ] Windows 真机验证卷 GUID 迁移和媒体解码
-- [ ] 播放错误历史查看与更细的设置持久化界面
+- [x] V1：目录授权、扫描、单轮不重复队列、Feed 手势、键盘控制、收藏和隐藏规则、外置卷解析、会话与设置持久化。
+- [x] V1.1（第二版）：收藏 Feed、多来源、文件管理器定位、确认后移入桌面系统回收站、播放位置恢复、手动重扫、精简模式。
+- [x] V1.2（第三版）：子目录范围、最新与最旧优先、智能随机、图片与 GIF。
+- [x] 显示与交互设置、预加载开关、外置盘缓冲设置、最近 100 条播放错误历史。
+- [x] 统一品牌图标、Android 自适应图标、Linux 原生目录桥接。
+- [x] Windows / Linux / macOS 双架构工作流、Linux deb 与 rpm、Android ARM64 与 ARMv7 分包。
+- [x] 本地 Flutter 分析、功能测试、打包脚本测试、图标一致性检查。
+- [x] 本地 macOS release 构建、ARM64 拆分和签名检查。
+- [x] 本地 Android 两份 release APK 构建与原生库 ABI 检查。
+
+## 设备验收
+
+- [ ] macOS：目录书签重启、重挂载、沙盒回收站和实际画面验收。本次 UI 自动化无法读取应用窗口，返回 cgWindowNotFound，不能替代功能验收。
+- [ ] Windows x64 / ARM64：移动盘盘符变化、系统回收站、硬解与全屏；双架构 CI 已通过，实际播放与文件操作仍待设备验收。
+- [ ] Linux x64 / ARM64：deb、rpm 在目标发行版安装，UUID 重挂载、文件管理器与回收站、Wayland / X11 解码。
+- [ ] Android ARM64 / ARMv7 真机：SAF 授权重启、图片 / GIF、H.264 / HEVC、4K、不同分辨率切换、后台 Surface 恢复、CPU、丢帧与内存。
+- [ ] 本机 NDK 28.2.13676358 安装不完整，仍需修复；本地验证使用已安装完整的 27.1.12297006。CI 保持 Flutter 默认版本。
+- [ ] 本机 API 37 模拟器此前出现 libmpv EGL_BAD_ATTRIBUTE（上游 #1343），不能把该模拟器运行当作原生画面通过。
+- [x] 配置稳定 Android 发布密钥；v0.3.0 起 CI 使用固定密钥。此前本地 APK 使用测试签名。
+- [x] GitHub Actions 全矩阵终态及产物校验记录，见 [构建验收](docs/verification.md)。
+
+## 后续设计研究
+
+DESIGN 将文件监听与弱指纹重命名识别列为后续可选研究。当前扫描保持手动刷新，重命名按旧项移除、新项发现处理。若增加弱指纹，须处理碰撞、读取成本和卷断开，不能仅凭大小及修改时间继承收藏。
+
+应用索引随来源保留，扫描清理失效记录；移除来源清理其状态。会话只保存最新一条，错误历史限 100 条，播放器实例与媒体数量无关。达到 100,000 个文件时仍需在真实磁盘上测量扫描耗时与内存。

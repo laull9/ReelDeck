@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../database/database.dart';
 import '../database/library_store.dart';
@@ -28,6 +29,7 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
   late final SourceManager sources;
   late final FeedController feed;
   late Future<void> _startup;
+  bool _awake = false;
 
   @override
   void initState() {
@@ -40,6 +42,7 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
       store: store,
       settings: settings,
     );
+    feed.addListener(_syncWakelock);
     _startup = _initialize();
   }
 
@@ -52,9 +55,17 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
     await feed.initialize();
   }
 
+  void _syncWakelock() {
+    if (_awake == feed.isPlaying) return;
+    _awake = feed.isPlaying;
+    WakelockPlus.toggle(enable: _awake);
+  }
+
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       feed.suspend();
     }
@@ -63,6 +74,8 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    feed.removeListener(_syncWakelock);
+    WakelockPlus.disable();
     feed.close().then((_) => db.close());
     sources.dispose();
     settings.dispose();
@@ -96,12 +109,18 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
               ),
             );
           }
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
-            );
-          }
-          return const FeedScreen();
+          // 原生首帧需要 Texture 已挂载；等待 initialize 时也保留 Feed。
+          return AbsorbPointer(
+            absorbing: snapshot.connectionState != ConnectionState.done,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                const FeedScreen(),
+                if (snapshot.connectionState != ConnectionState.done)
+                  const Center(child: CircularProgressIndicator()),
+              ],
+            ),
+          );
         },
       ),
       routes: {
