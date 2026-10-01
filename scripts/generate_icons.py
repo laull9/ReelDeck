@@ -4,10 +4,27 @@ import argparse
 import base64
 import io
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def same_image(name, actual, expected):
+    if name.endswith('.svg'):
+        def payload(data):
+            element = ET.fromstring(data).find('{http://www.w3.org/2000/svg}image')
+            return base64.b64decode(element.attrib['href'].split(',', 1)[1])
+        actual, expected = payload(actual), payload(expected)
+    left, right = Image.open(io.BytesIO(actual)), Image.open(io.BytesIO(expected))
+    if name.endswith('.ico'):
+        if left.ico.sizes() != right.ico.sizes():
+            return False
+        return all(left.ico.getimage(size).convert('RGBA').tobytes() ==
+                   right.ico.getimage(size).convert('RGBA').tobytes()
+                   for size in left.ico.sizes())
+    return left.size == right.size and left.convert('RGBA').tobytes() == right.convert('RGBA').tobytes()
 
 
 def generate():
@@ -62,7 +79,8 @@ def main():
     for name, data in files.items():
         path = ROOT / name
         if args.check:
-            if not path.exists() or path.read_bytes() != data:
+            # zlib 编码会随平台变化；验证尺寸与像素，而非压缩字节。
+            if not path.exists() or not same_image(name, path.read_bytes(), data):
                 failures.append(name)
         else:
             path.parent.mkdir(parents=True, exist_ok=True)

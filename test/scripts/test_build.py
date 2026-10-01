@@ -1,4 +1,4 @@
-import importlib.util
+import io
 from pathlib import Path
 import struct
 import sys
@@ -11,6 +11,8 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from ci_version import resolve_version
 from verify_arch import verify
 from package_android import validate_apk
+from generate_icons import same_image
+from PIL import Image
 
 
 def elf(machine):
@@ -30,6 +32,18 @@ def pe(machine):
 
 
 class BuildValidationTest(unittest.TestCase):
+    def test_png_compression_differences_preserve_pixels(self):
+        image = Image.new('RGBA', (32, 32), (10, 200, 140, 255))
+        first, second = io.BytesIO(), io.BytesIO()
+        image.save(first, format='PNG', compress_level=0)
+        image.save(second, format='PNG', compress_level=9)
+        self.assertNotEqual(first.getvalue(), second.getvalue())
+        self.assertTrue(same_image('icon.png', first.getvalue(), second.getvalue()))
+        image.putpixel((10, 10), (255, 0, 0, 255))
+        changed = io.BytesIO()
+        image.save(changed, format='PNG')
+        self.assertFalse(same_image('icon.png', first.getvalue(), changed.getvalue()))
+
     def test_release_cannot_use_wrong_or_missing_tag(self):
         self.assertEqual(resolve_version('version: 0.3.0+3\n', 'refs/tags/v0.3.0', '', True), ('0.3.0', 'v0.3.0'))
         for tag in ['', 'v0.2.0', 'v0.3.0\nmalicious=tag']:

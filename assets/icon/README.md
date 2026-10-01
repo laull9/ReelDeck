@@ -4,4 +4,4 @@
 
 `reeldeck.svg` 用 SVG 容器嵌入同一张图，方便单文件展示；内部仍为 PNG，没有可编辑的矢量路径。
 
-安装 `scripts/requirements.txt` 后运行 `python3 scripts/generate_icons.py` 重新生成；加 `--check` 核对已提交资源。颜色与形状沿用母图。
+安装 `scripts/requirements.txt` 后运行 `python3 scripts/generate_icons.py` 重新生成；加 `--check` 核对已提交资源的尺寸和像素（跨平台 PNG 压缩字节可不同）。颜色与形状沿用母图。

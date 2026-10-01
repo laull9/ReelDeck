@@ -315,27 +315,39 @@ class _FeedScreenState extends State<FeedScreen> {
                         ],
                       ),
                     ),
-                  if (feed.currentMediaId != null) ...[
+                  if (feed.currentMediaId != null &&
+                      (showProgress || detailed || _awake))
                     Positioned(
-                      right: 12,
-                      bottom: 124,
-                      child: ActionButtons(visible: detailed || _awake),
-                    ),
-                    if (showProgress)
-                      Positioned(
-                        left: 0,
-                        right: 0,
-                        bottom: 0,
-                        child: FeedControls(
-                          feed: feed,
-                          detailed: detailed,
-                          awake: _awake,
-                          next: () => _gestureKey.currentState?.animateNext(),
-                          previous: () =>
-                              _gestureKey.currentState?.animatePrevious(),
-                        ),
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (detailed || _awake)
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                right: 12,
+                                bottom: 8,
+                              ),
+                              child: Align(
+                                alignment: Alignment.centerRight,
+                                child: ActionButtons(visible: true),
+                              ),
+                            ),
+                          if (showProgress)
+                            FeedControls(
+                              feed: feed,
+                              detailed: detailed,
+                              awake: _awake,
+                              next: () =>
+                                  _gestureKey.currentState?.animateNext(),
+                              previous: () =>
+                                  _gestureKey.currentState?.animatePrevious(),
+                            ),
+                        ],
                       ),
-                  ],
+                    ),
                 ],
               ),
             ),

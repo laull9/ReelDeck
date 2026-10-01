@@ -36,6 +36,7 @@ class FeedControls extends StatelessWidget {
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
         child: Column(
+          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (detailed && settings.showFilename)
