@@ -76,6 +76,7 @@ void main() {
     expect(feed.currentPath, startsWith(folder.path));
     expect(feed.isPlaying, true);
     expect(feed.pool.nextPlayer!.isPlaying, false);
+    await feed.settled;
     final preloaded = feed.pool.nextPlayer;
     await feed.next();
     expect(feed.player, same(preloaded));
@@ -161,17 +162,15 @@ void main() {
     expect(feed.currentMediaId, id);
     expect(feed.isPlaying, false);
   });
-  test('默认恢复进度，切到下一条再返回直接从保存位置打开', () async {
+  test('默认恢复进度，切到下一条再返回从保存位置继续播放', () async {
     final id = feed.currentMediaId!;
     await feed.seekTo(const Duration(seconds: 23));
     await feed.next();
     expect((await db.stateDao.getState(id))!.lastPosition, 23000);
     await feed.previous();
     expect(feed.player!.position, const Duration(seconds: 23));
-    expect(
-      (feed.player as FakePlayerService).openedPositions.last,
-      const Duration(seconds: 23),
-    );
+    expect(feed.currentMediaId, id);
+    expect((await db.stateDao.getState(id))!.lastPosition, 23000);
   });
 
   test('暂停、后台和关闭立即保存，不等待五秒采样', () async {
@@ -193,6 +192,7 @@ void main() {
     final nextId = feed.queue.nextId!;
     await db.stateDao.updatePosition(nextId, 17000);
     await feed.retry();
+    await feed.settled;
     final preloaded = feed.pool.nextPlayer as FakePlayerService;
     expect(preloaded.position.inMilliseconds, 17000);
     await feed.next();
@@ -269,6 +269,57 @@ void main() {
     );
     expect(slow.seeks, [10, 25]);
   });
+  test('滑到仍在预加载的下一条时复用同一解码任务', () async {
+    await feed.close();
+    final slow = SlowPreloadPlayer();
+    var created = 0;
+    feed = await createFeed(
+      pool: PlayerPool(
+        playerFactory: () => created++ == 0 ? FakePlayerService() : slow,
+      ),
+    );
+    await slow.started.future;
+    final switching = feed.next();
+    await Future<void>.delayed(Duration.zero);
+    slow.gate.complete();
+    await switching;
+    expect(feed.player, same(slow));
+    expect(slow.opens, 1);
+    expect(feed.busy, false);
+    expect(feed.isPlaying, true);
+  });
+
+  test('解码超时停止自动遍历，保留当前项并结束加载提示', () async {
+    await feed.close();
+    final timeoutPlayer = TimeoutPlayer();
+    feed = await createFeed(
+      pool: PlayerPool(
+        preloadEnabled: false,
+        playerFactory: () => timeoutPlayer,
+      ),
+    );
+    expect(feed.busy, false);
+    expect(feed.error, contains('TimeoutException'));
+    expect(feed.currentMediaId, isNotNull);
+    expect(timeoutPlayer.opens, 1);
+    expect(feed.queueLength, 3);
+    timeoutPlayer.fail = false;
+    await feed.retry();
+    expect(feed.error, isNull);
+    expect(feed.isPlaying, true);
+  });
+
+  test('切换解码模式重新打开当前视频并保留播放进度', () async {
+    final id = feed.currentMediaId;
+    await feed.seekTo(const Duration(seconds: 7));
+    final opens = (feed.player as FakePlayerService).opens;
+    settings.update(decoderMode: 'no');
+    await feed.settled;
+    expect(feed.currentMediaId, id);
+    expect(feed.player!.position, const Duration(seconds: 7));
+    expect((feed.player as FakePlayerService).opens, greaterThan(opens));
+  });
+
   test('子目录范围使用路径边界，包含后续新增文件', () async {
     await Directory('${folder.path}/submarine').create();
     await File('${folder.path}/submarine/outside.mp4').writeAsString('fixture');
@@ -366,5 +417,28 @@ class SlowSeekPlayer extends FakePlayerService {
     seeks.add(position.inSeconds);
     if (seeks.length == 1) await gate.future;
     await super.seekTo(position);
+  }
+}
+
+class TimeoutPlayer extends FakePlayerService {
+  bool fail = true;
+  @override
+  Future<void> open(String path, {Duration start = Duration.zero}) async {
+    if (fail) {
+      opens++;
+      throw TimeoutException('视频输出未就绪');
+    }
+    await super.open(path, start: start);
+  }
+}
+
+class SlowPreloadPlayer extends FakePlayerService {
+  final started = Completer<void>();
+  final gate = Completer<void>();
+  @override
+  Future<void> open(String path, {Duration start = Duration.zero}) async {
+    if (!started.isCompleted) started.complete();
+    await gate.future;
+    await super.open(path, start: start);
   }
 }

@@ -1,122 +1,100 @@
+import 'dart:async';
+import 'dart:io';
+
 import 'player_service.dart';
 import 'media_kit_player.dart';
 
-/// 播放器缓冲池：管理当前、前一条与后一条播放器，提供平滑切换与零延迟预载。
+/// 当前播放器与备用播放器交接；Android 备用实例只做软解预加载。
 class PlayerPool {
   final PlayerService Function() _playerFactory;
   final bool preloadEnabled;
+  final bool _nativeFactory;
+  final bool softwarePreload;
   final List<PlayerService> _players = [];
-
   PlayerService? _currentPlayer;
-  PlayerService? _nextPlayer;
-  PlayerService? _previousPlayer;
-
-  Duration? _preloadedNextStart;
-  Duration? _preloadedPrevStart;
+  PlayerService? _sparePlayer;
+  Duration? _preloadedStart;
+  Future<void> _pending = Future.value();
+  bool _disposed = false;
 
   PlayerPool({
     PlayerService Function()? playerFactory,
     bool? preloadEnabled,
-  })  : _playerFactory = playerFactory ?? MediaKitPlayerService.new,
-        preloadEnabled = preloadEnabled ?? true;
+    bool? softwarePreload,
+  }) : _playerFactory = playerFactory ?? MediaKitPlayerService.new,
+       _nativeFactory = playerFactory == null,
+       softwarePreload = softwarePreload ?? Platform.isAndroid,
+       preloadEnabled = preloadEnabled ?? true;
 
   List<PlayerService> get players => List.unmodifiable(_players);
-
   PlayerService? get currentPlayer => _currentPlayer;
-  PlayerService? get nextPlayer => _nextPlayer;
-  PlayerService? get previousPlayer => _previousPlayer;
-
-  bool hasPreloadedNext(String path, Duration start) =>
-      _nextPlayer?.currentPath == path && _preloadedNextStart == start;
-
-  bool hasPreloadedPrevious(String path, Duration start) =>
-      _previousPlayer?.currentPath == path && _preloadedPrevStart == start;
+  PlayerService? get nextPlayer => _sparePlayer;
+  PlayerService? get previousPlayer => _sparePlayer;
 
   bool hasPreloaded(String path, Duration start) =>
-      hasPreloadedNext(path, start);
+      _sparePlayer?.currentPath == path && _preloadedStart == start;
+  bool hasPreloadedNext(String path, Duration start) =>
+      hasPreloaded(path, start);
+  bool hasPreloadedPrevious(String path, Duration start) =>
+      hasPreloaded(path, start);
+
+  Future<void> get settled => _pending;
+
+  Future<void> _run(Future<void> Function() action) {
+    final result = _pending.then((_) async {
+      if (!_disposed) await action();
+    });
+    _pending = result.then<void>((_) {}, onError: (Object _) {});
+    return result;
+  }
 
   Future<void> initialize() async {
     if (_currentPlayer != null) return;
     _currentPlayer = _playerFactory();
     _players.add(_currentPlayer!);
     if (preloadEnabled) {
-      _nextPlayer = _playerFactory();
-      _players.add(_nextPlayer!);
-      _previousPlayer = _playerFactory();
-      _players.add(_previousPlayer!);
+      _sparePlayer = softwarePreload && _nativeFactory
+          ? MediaKitPlayerService(decoderMode: 'no')
+          : _playerFactory();
+      _players.add(_sparePlayer!);
     }
   }
 
-  Future<void> playMedia(String path) async {
-    final player = _currentPlayer;
-    if (player != null) {
-      await player.open(path);
-      await player.play();
-    }
+  Future<void> playMedia(String path) => _run(() async {
+    await _currentPlayer?.open(path);
+    await _currentPlayer?.play();
+  });
+
+  Future<void> preloadNext(String path, {Duration start = Duration.zero}) {
+    // 捕获实例，排队期间发生交接则丢弃请求，不能覆盖正在播放的文件。
+    final expected = _sparePlayer;
+    return _run(() async {
+      if (expected == null || !identical(expected, _sparePlayer)) return;
+      if (hasPreloaded(path, start)) return;
+      _preloadedStart = null;
+      await expected.open(path, start: start);
+      _preloadedStart = start;
+    });
   }
 
-  Future<void> preloadNext(
-    String path, {
-    Duration start = Duration.zero,
-  }) async {
-    final player = _nextPlayer;
-    if (player != null) {
-      if (player.currentPath == path && _preloadedNextStart == start) {
-        return;
-      }
-      _preloadedNextStart = null;
-      await player.open(path, start: start);
-      _preloadedNextStart = start;
-    }
-  }
+  Future<void> preloadPrevious(String path, {Duration start = Duration.zero}) =>
+      preloadNext(path, start: start);
 
-  Future<void> preloadPrevious(
-    String path, {
-    Duration start = Duration.zero,
-  }) async {
-    final player = _previousPlayer;
-    if (player != null) {
-      if (player.currentPath == path && _preloadedPrevStart == start) {
-        return;
-      }
-      _preloadedPrevStart = null;
-      await player.open(path, start: start);
-      _preloadedPrevStart = start;
-    }
-  }
-
-  Future<void> swapToNext() async {
-    if (_currentPlayer == null || _nextPlayer == null) return;
-    _preloadedNextStart = null;
-    await _currentPlayer?.pause();
-    if (_previousPlayer != null) {
-      final recycled = _previousPlayer!;
-      _previousPlayer = _currentPlayer;
-      _currentPlayer = _nextPlayer;
-      _nextPlayer = recycled;
+  Future<void> swapToNext() => _run(() async {
+    if (_currentPlayer == null || _sparePlayer == null) return;
+    final previous = _currentPlayer!;
+    if (softwarePreload && previous is MediaKitPlayerService) {
+      // 先释放旧硬解，后台已准备的帧继续留在备用 Texture 中。
+      await previous.releaseMedia();
     } else {
-      final temp = _currentPlayer;
-      _currentPlayer = _nextPlayer;
-      _nextPlayer = temp;
+      await previous.pause();
     }
-  }
+    _currentPlayer = _sparePlayer;
+    _sparePlayer = previous;
+    _preloadedStart = previous.position;
+  });
 
-  Future<void> swapToPrevious() async {
-    if (_currentPlayer == null || _previousPlayer == null) return;
-    _preloadedPrevStart = null;
-    await _currentPlayer?.pause();
-    if (_nextPlayer != null) {
-      final recycled = _nextPlayer!;
-      _nextPlayer = _currentPlayer;
-      _currentPlayer = _previousPlayer;
-      _previousPlayer = recycled;
-    } else {
-      final temp = _currentPlayer;
-      _currentPlayer = _previousPlayer;
-      _previousPlayer = temp;
-    }
-  }
-
+  Future<void> swapToPrevious() => swapToNext();
   Future<void> swap() => swapToNext();
 
   Future<void> advanceToNext() async {
@@ -125,24 +103,27 @@ class PlayerPool {
   }
 
   Future<void> goToPrevious(String path) async {
-    if (_previousPlayer != null && _previousPlayer?.currentPath == path) {
-      await swapToPrevious();
-    } else {
-      await swapToPrevious();
-      if (_currentPlayer?.currentPath != path) {
-        await _currentPlayer?.open(path);
-      }
-    }
+    if (_sparePlayer?.currentPath == path) await swapToPrevious();
+    if (_currentPlayer?.currentPath != path) await _currentPlayer?.open(path);
     await _currentPlayer?.play();
   }
 
-  Future<void> dispose() async {
-    for (final p in _players) {
-      await p.dispose();
+  Future<void> releasePreloads() => _run(() async {
+    _preloadedStart = null;
+    if (_sparePlayer case final MediaKitPlayerService spare) {
+      await spare.releaseMedia();
+    } else {
+      await _sparePlayer?.pause();
     }
-    _currentPlayer = null;
-    _nextPlayer = null;
-    _previousPlayer = null;
+  });
+
+  Future<void> dispose() async {
+    _disposed = true;
+    await _pending;
+    for (final player in _players) {
+      await player.dispose();
+    }
+    _currentPlayer = _sparePlayer = null;
     _players.clear();
   }
 }

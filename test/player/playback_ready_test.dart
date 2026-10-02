@@ -30,4 +30,25 @@ void main() {
       throwsA(isA<TimeoutException>()),
     );
   });
+  test('原生属性查询不返回时仍按预算超时', () async {
+    await expectLater(
+      waitForPlaybackReady(
+        position: Duration.zero,
+        timeout: const Duration(milliseconds: 10),
+        getProperty: (_) => Completer<String>().future,
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
+  test('多个阶段共享预算，不为每个阶段重新计时', () async {
+    final deadline = PlaybackDeadline(
+      timeout: const Duration(milliseconds: 40),
+    );
+    await deadline.wait(Future<void>.delayed(const Duration(milliseconds: 25)));
+    await expectLater(
+      deadline.wait(Future<void>.delayed(const Duration(milliseconds: 25))),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
 }

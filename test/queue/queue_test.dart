@@ -91,6 +91,34 @@ void main() {
       expect(reshuffledElements, equals(originalElements));
     });
 
+    test('下一轮预加载目标与实际首项一致，准备时不改变当前队列', () {
+      final engine = QueueEngine(random: Random(42));
+      engine.buildQueue([1, 2, 3, 4]);
+      while (engine.advance()) {}
+      final last = engine.currentId;
+      final oldQueue = engine.queue;
+      final prepared = engine.prepareNextRound(reshuffle: true);
+      expect(engine.currentId, last);
+      expect(engine.queue, oldQueue);
+      expect(prepared, isNot(last));
+      expect(engine.prepareNextRound(reshuffle: true), prepared);
+      engine.startNextRound(reshuffle: true);
+      expect(engine.currentId, prepared);
+      expect(engine.queue.toSet(), oldQueue.toSet());
+    });
+
+    test('重扫移除媒体后不复用旧下一轮，顺序循环保留首项', () {
+      final engine = QueueEngine(random: Random(42));
+      engine.restore([1, 2, 3], 2);
+      engine.prepareNextRound(reshuffle: true);
+      engine.reconcile([2, 3]);
+      final first = engine.queue.first;
+      engine.prepareNextRound(reshuffle: false);
+      engine.startNextRound(reshuffle: false);
+      expect(engine.currentId, first);
+      expect(engine.queue, [2, 3]);
+    });
+
     test('empty queue handles methods safely', () {
       final engine = QueueEngine();
       engine.buildQueue([]);

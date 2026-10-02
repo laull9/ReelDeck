@@ -63,3 +63,7 @@ ORG_GRADLE_PROJECT_reeldeckNdkVersion=27.1.12297006 flutter build apk --release 
 四组构建任务全部成功后才汇总 10 个文件，生成 `SHA256SUMS` 并上传。Windows 检查整个目录中的 PE 架构和必需 DLL；Linux 检查 ELF 架构、动态链接、deb 安装和启动；macOS 拆分并检查全部 Mach-O 后重新本地签名；Android 检查 APK 的唯一 ABI 与 Flutter、Dart AOT、libmpv 库。
 
 macOS 的本地签名用于保持包内签名一致，未包含 Developer ID 与公证。CI 中的 Linux 启动检查使用 Xvfb，只覆盖安装和启动，不代替硬件解码与外置卷测试。设备验收记录见 [TODO](../TODO.md)。
+
+## 版本记录
+
+[v0.4.1](versions/v0.4.1.md) 修复进度恢复时的加载超时，并提前准备下一条视频与下一轮首项。

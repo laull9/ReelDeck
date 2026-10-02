@@ -43,6 +43,9 @@ class FeedController extends ChangeNotifier {
   String _order = 'shuffle';
   bool _includeImages = false;
   bool _preloadSetting = true;
+  int _preloadGeneration = 0;
+  int? _preloadMediaId;
+  String _decoderSetting = 'auto';
   double _volumeSetting = 1;
   bool _driveSetting = true;
   bool get isImage =>
@@ -51,6 +54,7 @@ class FeedController extends ChangeNotifier {
   List<HiddenRuleEntry> _rules = [];
   Future<void> _pending = Future.value();
   Future<void> _positionWrites = Future.value();
+  Future<void> _preloadTask = Future.value();
   bool _disposed = false, _ready = false, _showInfo = true;
   int _revision = -1, _positionSaved = -1, _positionNotified = -1;
   int? _openedMediaId;
@@ -103,6 +107,8 @@ class FeedController extends ChangeNotifier {
   Future<void> get settled async {
     await _pending;
     await _positionWrites;
+    await _preloadTask;
+    await pool.settled;
   }
 
   void _notify() {
@@ -127,6 +133,7 @@ class FeedController extends ChangeNotifier {
     _order = settings.queueOrder;
     _includeImages = settings.includeImages;
     _preloadSetting = settings.preloadNext;
+    _decoderSetting = settings.decoderMode;
     _volumeSetting = settings.defaultVolume;
     _driveSetting = settings.externalDriveOptimization;
     await errorLog.load(
@@ -241,24 +248,40 @@ class FeedController extends ChangeNotifier {
       });
     }
     sourceManager?.recursive = settings.recursiveScan;
+    final decoderChanged = _decoderSetting != settings.decoderMode;
+    final preloadChanged = _preloadSetting != settings.preloadNext;
     final releaseNext = _preloadSetting && !settings.preloadNext;
     final changedPlayback =
         _volumeSetting != settings.defaultVolume ||
         _driveSetting != settings.externalDriveOptimization ||
-        releaseNext;
+        preloadChanged ||
+        decoderChanged;
     _preloadSetting = settings.preloadNext;
     _volumeSetting = settings.defaultVolume;
     _driveSetting = settings.externalDriveOptimization;
+    _decoderSetting = settings.decoderMode;
+    if (releaseNext || decoderChanged) _preloadGeneration++;
     if (changedPlayback) {
       _run(() async {
+        await pool.settled;
         await player?.setVolume(muted ? 0 : settings.defaultVolume);
         if (player is MediaKitPlayerService) {
           await (player as MediaKitPlayerService).setDriveOptimization(
             settings.externalDriveOptimization,
           );
         }
-        if (releaseNext && pool.nextPlayer is MediaKitPlayerService) {
-          await (pool.nextPlayer as MediaKitPlayerService).releaseMedia();
+        if (releaseNext || decoderChanged) await pool.releasePreloads();
+        if (decoderChanged) {
+          final resumePlaying = isPlaying;
+          await _savePosition();
+          await _open();
+          if (!resumePlaying) {
+            await player?.pause();
+            _pauseImage();
+            _playing = false;
+          }
+        } else if (settings.preloadNext) {
+          _preloadNeighbors();
         }
       });
     }
@@ -280,6 +303,10 @@ class FeedController extends ChangeNotifier {
     });
   }
 
+  bool get _shuffleRound =>
+      settings.reshuffleAfterRound &&
+      ['shuffle', 'smart'].contains(settings.queueOrder);
+
   Future<void> next() => _run(() async {
     await _savePosition();
     if (!queue.advance()) {
@@ -288,12 +315,7 @@ class FeedController extends ChangeNotifier {
         _pauseImage();
         return;
       }
-      if (settings.reshuffleAfterRound &&
-          ['shuffle', 'smart'].contains(settings.queueOrder)) {
-        queue.reshuffle();
-      } else {
-        queue.restart();
-      }
+      queue.startNextRound(reshuffle: _shuffleRound);
     }
     await _open();
   });
@@ -415,8 +437,10 @@ class FeedController extends ChangeNotifier {
   Future<void> _close() async {
     sourceManager?.removeListener(_sourcesChanged);
     settings.removeListener(_settingsChanged);
+    _preloadGeneration++;
     await _pending;
     _pauseImage();
+    await _preloadTask;
     await errorLog.flushed;
     _disposed = true;
     await player?.pause();

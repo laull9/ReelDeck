@@ -95,68 +95,75 @@ void main() {
     await pool.dispose();
   });
 
-  test('PlayerPool initialization and advanceToNext logic', () async {
-    final pool = PlayerPool(playerFactory: FakePlayerService.new);
-    expect(pool.currentPlayer, isNull);
-    expect(pool.nextPlayer, isNull);
-    expect(pool.previousPlayer, isNull);
-
-    await pool.initialize();
-
-    expect(pool.currentPlayer, isNotNull);
-    expect(pool.nextPlayer, isNotNull);
-    expect(pool.previousPlayer, isNotNull);
-
-    final initialCurrent = pool.currentPlayer;
-    final initialNext = pool.nextPlayer;
-    final initialPrevious = pool.previousPlayer;
-
-    await pool.advanceToNext();
-
-    expect(pool.currentPlayer, equals(initialNext));
-    expect(pool.previousPlayer, equals(initialCurrent));
-    expect(pool.nextPlayer, equals(initialPrevious));
-    expect(pool.currentPlayer?.isPlaying, isTrue);
-    await pool.dispose();
-  });
-
-  test('PlayerPool goToPrevious logic', () async {
+  test('桌面只用两个解码器，前进后可复用刚暂停的上一条', () async {
     final pool = PlayerPool(playerFactory: FakePlayerService.new);
     await pool.initialize();
-
-    final initialCurrent = pool.currentPlayer;
-    final initialNext = pool.nextPlayer;
-    final initialPrevious = pool.previousPlayer;
-
-    await pool.goToPrevious('test_path.mp4');
-
-    expect(pool.currentPlayer, equals(initialPrevious));
-    expect(pool.nextPlayer, equals(initialCurrent));
-    expect(pool.previousPlayer, equals(initialNext));
-    expect(pool.currentPlayer?.currentPath, equals('test_path.mp4'));
-    expect(pool.currentPlayer?.isPlaying, isTrue);
-    await pool.dispose();
-  });
-
-  test('PlayerPool 双向预载验证', () async {
-    final pool = PlayerPool(playerFactory: FakePlayerService.new);
-    await pool.initialize();
-
+    expect(pool.players, hasLength(2));
+    await pool.playMedia('current.mp4');
+    await pool.currentPlayer!.seekTo(const Duration(seconds: 7));
+    final first = pool.currentPlayer;
     await pool.preloadNext('next.mp4', start: const Duration(seconds: 5));
-    await pool.preloadPrevious('prev.mp4', start: const Duration(seconds: 10));
-
-    expect(
-      pool.hasPreloadedNext('next.mp4', const Duration(seconds: 5)),
-      isTrue,
-    );
-    expect(
-      pool.hasPreloadedPrevious('prev.mp4', const Duration(seconds: 10)),
-      isTrue,
-    );
-
     await pool.advanceToNext();
-    expect(pool.currentPlayer?.currentPath, 'next.mp4');
-
+    expect(pool.currentPlayer!.currentPath, 'next.mp4');
+    expect(pool.currentPlayer!.isPlaying, true);
+    expect(
+      pool.hasPreloadedPrevious('current.mp4', const Duration(seconds: 7)),
+      true,
+    );
+    await pool.goToPrevious('current.mp4');
+    expect(pool.currentPlayer, same(first));
+    expect(pool.currentPlayer!.position.inSeconds, 7);
     await pool.dispose();
   });
+
+  test('连续预加载与交接串行，旧请求不会覆盖正在播放的文件', () async {
+    final slow = SlowOpenPlayer();
+    var created = 0;
+    final pool = PlayerPool(
+      playerFactory: () => created++ == 0 ? FakePlayerService() : slow,
+    );
+    await pool.initialize();
+    await pool.playMedia('current.mp4');
+    final preload = pool.preloadNext('next.mp4');
+    await slow.started.future;
+    final swap = pool.swapToNext();
+    final stale = pool.preloadNext('stale.mp4');
+    slow.gate.complete();
+    await Future.wait([preload, swap, stale]);
+    expect(pool.currentPlayer, same(slow));
+    expect(pool.currentPlayer!.currentPath, 'next.mp4');
+    expect(pool.nextPlayer!.currentPath, 'current.mp4');
+    await pool.dispose();
+  });
+
+  test('关闭等待在途预加载完成后释放播放器', () async {
+    final slow = SlowOpenPlayer();
+    var created = 0;
+    final pool = PlayerPool(
+      playerFactory: () => created++ == 0 ? FakePlayerService() : slow,
+    );
+    await pool.initialize();
+    final preload = pool.preloadNext('next.mp4');
+    await slow.started.future;
+    final closing = pool.dispose();
+    var closed = false;
+    closing.then((_) => closed = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(closed, false);
+    slow.gate.complete();
+    await preload;
+    await closing;
+    expect(pool.players, isEmpty);
+  });
+}
+
+class SlowOpenPlayer extends FakePlayerService {
+  final started = Completer<void>();
+  final gate = Completer<void>();
+  @override
+  Future<void> open(String path, {Duration start = Duration.zero}) async {
+    started.complete();
+    await gate.future;
+    await super.open(path, start: start);
+  }
 }

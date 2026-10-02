@@ -10,13 +10,17 @@ class QueueEngine {
   List<int> Function(List<int>, Random)? orderer;
   List<int> _queue = [];
   int _currentIndex = -1;
+  List<int>? _nextRound;
+  bool? _nextRoundShuffled;
 
   void restore(List<int> ids, int index) {
+    _nextRound = null;
     _queue = ids.toSet().toList();
     _currentIndex = _queue.isEmpty ? -1 : index.clamp(0, _queue.length - 1);
   }
 
   void reconcile(List<int> eligible, {bool reorderPending = false}) {
+    _nextRound = null;
     final current = currentId;
     final allowed = eligible.toSet();
     final retained = _queue.where(allowed.contains).toList();
@@ -63,6 +67,7 @@ class QueueEngine {
 
   /// Builds a shuffled queue from [eligibleMediaIds] using Fisher-Yates.
   void buildQueue(List<int> eligibleMediaIds) {
+    _nextRound = null;
     _queue = eligibleMediaIds.toSet().toList();
     _order();
     _currentIndex = _queue.isNotEmpty ? 0 : -1;
@@ -108,15 +113,52 @@ class QueueEngine {
   /// Returns `true` if moved back successfully, or `false` if already at the beginning.
   bool goBack() {
     if (_currentIndex > 0) {
+      _nextRound = null;
       _currentIndex--;
       return true;
     }
     return false;
   }
 
+  /// 最后一条播放时确定下一轮首项，让预加载和实际前进使用同一目标。
+  int? prepareNextRound({required bool reshuffle}) {
+    if (_queue.isEmpty) return null;
+    if (_nextRound == null || _nextRoundShuffled != reshuffle) {
+      final planned = List<int>.of(_queue);
+      if (reshuffle) {
+        if (orderer != null) {
+          final ordered = List<int>.of(orderer!(planned, _random));
+          planned
+            ..clear()
+            ..addAll(ordered);
+        } else {
+          fisherYatesShuffle(planned, random: _random);
+        }
+        if (planned.length > 1 && planned.first == currentId) {
+          final index = 1 + _random.nextInt(planned.length - 1);
+          final first = planned[0];
+          planned[0] = planned[index];
+          planned[index] = first;
+        }
+      }
+      _nextRound = planned;
+      _nextRoundShuffled = reshuffle;
+    }
+    return _nextRound!.first;
+  }
+
+  void startNextRound({required bool reshuffle}) {
+    prepareNextRound(reshuffle: reshuffle);
+    if (_nextRound == null) return;
+    _queue = _nextRound!;
+    _nextRound = null;
+    _currentIndex = 0;
+  }
+
   /// Reshuffles the current queue using Fisher-Yates and resets the index to the beginning.
   /// If the queue has more than 1 item, avoids repeating the last played item immediately.
   void reshuffle() {
+    _nextRound = null;
     if (_queue.isEmpty) return;
     final previousLast = currentId;
     _order();
