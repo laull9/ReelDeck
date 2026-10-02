@@ -96,11 +96,13 @@ class _FeedScreenState extends State<FeedScreen> {
             child: FeedGestureHandler(
               key: _gestureKey,
               displayedMediaId: feed.displayedMediaId,
+              canGoNext: feed.canGoNext,
+              canGoPrevious: feed.canGoPrevious,
               shortcuts: feed.settings.shortcuts,
               animations: settings.animations,
               doubleTapFavorite: settings.doubleTapFavorite,
               keyboardEnabled: settings.keyboardEnabled,
-              swipeEnabled: feed.currentMediaId != null,
+              swipeEnabled: feed.currentMediaId != null && !feed.busy,
               onNext: feed.next,
               onPrevious: feed.previous,
               onTogglePlayPause: () {

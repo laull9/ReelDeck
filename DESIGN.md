@@ -840,11 +840,11 @@ buffer small amount
 移动端：
 
 ```text
-Swipe Down
-→ Next
+Drag Up
+→ Next video below
 
-Swipe Up
-→ Previous
+Drag Down
+→ Previous video above, or rebound at the beginning
 
 Tap
 → Play / Pause
@@ -866,11 +866,11 @@ Horizontal Drag
 触控板：
 
 ```text
-Swipe Down
-→ Next
+Drag Up
+→ Next video below
 
-Swipe Up
-→ Previous
+Drag Down
+→ Previous video above, or rebound at the beginning
 ```
 
 滚轮和触控板事件需要：

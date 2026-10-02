@@ -173,14 +173,14 @@ void main() {
       expect(nextCount, 0);
       expect(prevCount, 0);
 
-      // 下滑切到下一条，动画完成后才交接。
-      await tester.drag(find.text('当前视频内容'), const Offset(0, 180));
+      // 当前画面向上离场，滑到下方的下一条。
+      await tester.drag(find.text('当前视频内容'), const Offset(0, -180));
       await tester.pumpAndSettle();
       expect(nextCount, 1);
       expect(prevCount, 0);
 
-      // 上滑返回上一条。
-      await tester.drag(find.text('当前视频内容'), const Offset(0, -180));
+      // 当前画面向下离场，滑回上方的上一条。
+      await tester.drag(find.text('当前视频内容'), const Offset(0, 180));
       await tester.pumpAndSettle();
       expect(nextCount, 1);
       expect(prevCount, 1);

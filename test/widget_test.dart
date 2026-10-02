@@ -29,7 +29,7 @@ void main() {
     expect(find.text('添加目录'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
-  testWidgets('一次下滑只切换一条，向上滑和键盘返回有效', (tester) async {
+  testWidgets('滑到下方进入下一条，滑回上方和键盘返回有效', (tester) async {
     var next = 0, previous = 0;
     void noop() {}
     await tester.pumpWidget(
@@ -53,11 +53,11 @@ void main() {
         ),
       ),
     );
-    await tester.drag(find.byType(FeedGestureHandler), const Offset(0, 200));
+    await tester.drag(find.byType(FeedGestureHandler), const Offset(0, -200));
     await tester.pumpAndSettle();
     expect(next, 1);
     expect(previous, 0);
-    await tester.drag(find.byType(FeedGestureHandler), const Offset(0, -200));
+    await tester.drag(find.byType(FeedGestureHandler), const Offset(0, 200));
     await tester.pumpAndSettle();
     expect(previous, 1);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);

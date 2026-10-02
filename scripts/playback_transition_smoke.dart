@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:drift/native.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:media_kit/media_kit.dart' show MediaKit;
@@ -11,7 +12,6 @@ import 'package:provider/provider.dart';
 import 'package:reel_deck/database/database.dart';
 import 'package:reel_deck/database/library_store.dart';
 import 'package:reel_deck/feed/feed_controller.dart';
-import 'package:reel_deck/feed/feed_gestures.dart';
 import 'package:reel_deck/feed/feed_screen.dart';
 import 'package:reel_deck/settings/settings.dart';
 import 'package:reel_deck/sources/source.dart';
@@ -104,35 +104,73 @@ Future<void> runTransitionSmoke(Map<String, Uint8List> fixtures) async {
       }
     }
 
-    FeedGestureHandlerState handler() {
-      FeedGestureHandlerState? found;
-      void visit(Element element) {
-        if (element is StatefulElement &&
-            element.state is FeedGestureHandlerState) {
-          found = element.state as FeedGestureHandlerState;
-        }
-        element.visitChildren(visit);
+    void navigate({required bool next, bool wheel = false}) {
+      final box = boundaryKey.currentContext!.findRenderObject()! as RenderBox;
+      final origin = box.localToGlobal(box.size.center(Offset.zero));
+      final binding = GestureBinding.instance;
+      if (wheel) {
+        binding.handlePointerEvent(
+          PointerScrollEvent(
+            position: origin,
+            scrollDelta: Offset(0, next ? 80 : -80),
+          ),
+        );
+        return;
       }
-
-      visit(WidgetsBinding.instance.rootElement!);
-      return found!;
+      const pointer = 91;
+      final direction = next ? -1.0 : 1.0;
+      binding.handlePointerEvent(
+        PointerPanZoomStartEvent(pointer: pointer, position: origin),
+      );
+      for (final distance in [80.0, 180.0]) {
+        binding.handlePointerEvent(
+          PointerPanZoomUpdateEvent(
+            pointer: pointer,
+            position: origin,
+            pan: Offset(0, direction * distance),
+            panDelta: Offset(0, direction * (distance == 80 ? 80 : 100)),
+          ),
+        );
+      }
+      binding.handlePointerEvent(
+        const PointerPanZoomEndEvent(pointer: pointer),
+      );
     }
 
-    final initial = await sample();
-    if (initial != 'red') throw StateError('初始 Texture 未显示红帧：$initial');
+    var initial = await sample();
+    final initialWatch = Stopwatch()..start();
+    while (initial != 'red' &&
+        initialWatch.elapsed < const Duration(seconds: 3)) {
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+      initial = await sample();
+    }
+    if (initial != 'red') {
+      throw StateError(
+        '初始 Texture 未显示红帧：$initial busy=${feed.busy} '
+        'id=${feed.currentMediaId}/${ids.first} error=${feed.error}',
+      );
+    }
     debugPrint('TRANSITION initial red PASS');
+
+    final first = feed.currentMediaId;
+    final plays = (await db.stateDao.getState(first!))!.playCount;
+    navigate(next: false);
+    await Future<void>.delayed(const Duration(milliseconds: 400));
+    if (feed.currentMediaId != first ||
+        await sample() != 'red' ||
+        (await db.stateDao.getState(first))!.playCount != plays) {
+      throw StateError('没有上一条时没有原页回弹');
+    }
+    debugPrint('TRANSITION boundary rebound PASS');
 
     Future<void> switchAndCheck({
       required bool next,
       required int id,
       required String oldColor,
       required String color,
+      bool wheel = false,
     }) async {
-      if (next) {
-        handler().animateNext();
-      } else {
-        handler().animatePrevious();
-      }
+      navigate(next: next, wheel: wheel);
       var oldLeft = false;
       var targetShown = false;
       var samples = 0;
@@ -167,6 +205,7 @@ Future<void> runTransitionSmoke(Map<String, Uint8List> fixtures) async {
       id: ids[1],
       oldColor: 'red',
       color: 'green',
+      wheel: true,
     );
     await switchAndCheck(
       next: false,

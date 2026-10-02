@@ -66,7 +66,7 @@ Android nécessite Android 7.0 (API 24) ou une version plus récente.
 
 Ouvrez l'application et ajoutez un dossier multimédia. La lecture commence dès la fin de l'indexation.
 
-Glissez vers le bas pour la vidéo suivante, vers le haut pour la précédente. Touchez pour lire/mettre en pause, double-touchez pour ajouter aux favoris, maintenez enfoncé pour la vitesse 2x.
+Défilez vers le bas pour la vidéo suivante, vers le haut pour la précédente. Faites glisser la vidéo vers le haut pour révéler la suivante, ou vers le bas pour revenir à la précédente. Touchez pour lire/mettre en pause, double-touchez pour ajouter aux favoris, maintenez enfoncé pour la vitesse 2x.
 
 | Raccourci par défaut | Action |
 | --- | --- |

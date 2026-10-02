@@ -89,6 +89,10 @@ class FeedController extends ChangeNotifier {
 
   int? get currentMediaId => queue.currentId;
   int? get displayedMediaId => _openedMediaId;
+  bool get canGoPrevious =>
+      queue.previousId != null && queue.previousId != currentMediaId;
+  bool get canGoNext =>
+      queue.nextId != null || (settings.loopQueue && queue.queue.length > 1);
   Media? get currentMedia => _media[currentMediaId];
   String? get currentPath => _path;
   String get currentFileName => currentMedia?.fileName ?? '';

@@ -46,7 +46,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 90));
     expect(switches, 0);
-    expect(tester.getTopLeft(find.text('旧视频')).dy, greaterThan(origin.dy));
+    expect(tester.getTopLeft(find.text('旧视频')).dy, lessThan(origin.dy));
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump();
     expect(switches, 1);
@@ -182,7 +182,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(switches, 1);
     final transform = tester.widget<Transform>(find.byType(Transform).first);
-    expect(transform.transform.storage[13], 600);
+    expect(transform.transform.storage[13], -600);
     expect(find.byIcon(Icons.skip_next), findsNothing);
     opened.complete();
     await tester.pump();

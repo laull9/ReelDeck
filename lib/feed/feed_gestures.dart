@@ -13,6 +13,8 @@ class FeedGestureHandler extends StatefulWidget {
   final bool doubleTapFavorite;
   final bool keyboardEnabled;
   final bool swipeEnabled;
+  final bool canGoNext;
+  final bool canGoPrevious;
   final Object? displayedMediaId;
   final Widget? topOverlay;
   final Widget? bottomOverlay;
@@ -41,6 +43,8 @@ class FeedGestureHandler extends StatefulWidget {
     this.doubleTapFavorite = true,
     this.keyboardEnabled = true,
     this.swipeEnabled = true,
+    this.canGoNext = true,
+    this.canGoPrevious = true,
     this.displayedMediaId,
     this.topOverlay,
     this.bottomOverlay,
@@ -147,15 +151,23 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
 
   Future<void> _switch(bool next) async {
     if (!widget.swipeEnabled || _switching || _isAnimating) return;
+    if (!(next ? widget.canGoNext : widget.canGoPrevious)) {
+      if (_dragOffset != 0) await _animateSlideFrom(_dragOffset);
+      return;
+    }
     _switching = true;
     try {
       if (widget.animations) {
         await _animateSlide(
           _dragOffset,
-          next ? _viewportHeight : -_viewportHeight,
+          next ? -_viewportHeight : _viewportHeight,
         );
       }
       if (!mounted) return;
+      if (!(next ? widget.canGoNext : widget.canGoPrevious)) {
+        await _animateSlideFrom(_dragOffset);
+        return;
+      }
       final result = next ? widget.onNext() : widget.onPrevious();
       if (result is Future<void>) await result;
     } finally {
@@ -307,7 +319,17 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
                   ? (details) {
                       if (_isAnimating || _switching) return;
                       setState(() {
-                        _dragOffset += details.delta.dy;
+                        final offset = _dragOffset + details.delta.dy;
+                        final blocked = offset < 0
+                            ? !widget.canGoNext
+                            : !widget.canGoPrevious;
+                        // 到达边界只轻拉当前页，松手回弹，不走整页切换。
+                        _dragOffset = blocked
+                            ? (offset * 0.4).clamp(
+                                -height * 0.12,
+                                height * 0.12,
+                              )
+                            : offset.clamp(-height, height);
                       });
                     }
                   : null,
@@ -315,9 +337,9 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
                   ? (details) {
                       if (_isAnimating || _switching) return;
                       final velocity = details.primaryVelocity ?? 0;
-                      if (_dragOffset > 60 || velocity > 400) {
+                      if (_dragOffset < -60 || velocity < -400) {
                         animateNext(height);
-                      } else if (_dragOffset < -60 || velocity < -400) {
+                      } else if (_dragOffset > 60 || velocity > 400) {
                         animatePrevious(height);
                       } else {
                         _animateSlideFrom(_dragOffset);
