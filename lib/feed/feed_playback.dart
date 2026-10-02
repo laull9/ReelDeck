@@ -46,7 +46,13 @@ extension FeedPlayback on FeedController {
     if (active == null || id == null) return;
     _subscriptions.addAll([
       active.positionStream.listen((value) {
-        if (_disposed || busy || _isScrubbing || _openedMediaId != id) return;
+        if (_disposed ||
+            busy ||
+            _opening ||
+            _isScrubbing ||
+            _openedMediaId != id) {
+          return;
+        }
         position = value;
         // 写入时捕获视频 ID 和位置，排队后也不会写到下一条视频。
         final bucket = value.inSeconds ~/ 5;
@@ -62,17 +68,17 @@ extension FeedPlayback on FeedController {
         }
       }),
       active.durationStream.listen((value) {
-        if (busy) return;
+        if (busy || _opening) return;
         duration = value;
         _notify();
       }),
       active.playingStream.listen((value) {
-        if (busy) return;
+        if (busy || _opening) return;
         _playing = value;
         _notify();
       }),
       active.completedStream.listen((done) {
-        if (done && !busy && _openedMediaId == id) {
+        if (done && !busy && !_opening && _openedMediaId == id) {
           _completed = true;
           next();
         }
@@ -81,7 +87,7 @@ extension FeedPlayback on FeedController {
     if (active is MediaKitPlayerService) {
       _subscriptions.add(
         active.errors.listen((message) {
-          if (busy || _openedMediaId != id) return;
+          if (busy || _opening || _openedMediaId != id) return;
           _run(() async {
             await active.pause();
             await _recover('无法播放 $currentFileName：$message');
@@ -112,12 +118,21 @@ extension FeedPlayback on FeedController {
   }
 
   Future<void> _open() async {
+    final previousOpening = _opening;
+    _opening = true;
+    try {
+      await _openMedia();
+    } finally {
+      _opening = previousOpening;
+    }
+  }
+
+  Future<void> _openMedia() async {
     // 滑到正在预加载的目标时接管同一任务，避免取消后再次解码。
     if (_preloadMediaId == currentMediaId) {
       await _preloadTask;
     }
     _preloadGeneration++;
-    await pool.settled;
     _isScrubbing = false;
     _pauseImage();
     imageBytes = null;

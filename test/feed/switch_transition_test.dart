@@ -17,6 +17,7 @@ void main() {
           body: StatefulBuilder(
             builder: (context, update) => FeedGestureHandler(
               key: key,
+              displayedMediaId: current,
               onNext: () {
                 switches++;
                 // 播放器先切换画面，后台预加载随后才结束。
@@ -45,7 +46,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 90));
     expect(switches, 0);
-    expect(tester.getTopLeft(find.text('旧视频')).dy, lessThan(origin.dy));
+    expect(tester.getTopLeft(find.text('旧视频')).dy, greaterThan(origin.dy));
     await tester.pump(const Duration(milliseconds: 100));
     await tester.pump();
     expect(switches, 1);
@@ -62,6 +63,47 @@ void main() {
       expect(tester.getTopLeft(find.text('新视频')), origin);
     }
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('异步交接期间旧画面保持离场，不能在原位闪回', (tester) async {
+    final opened = Completer<void>();
+    final key = GlobalKey<FeedGestureHandlerState>();
+    void noop() {}
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FeedGestureHandler(
+            key: key,
+            onNext: () => opened.future,
+            onPrevious: noop,
+            onTogglePlayPause: noop,
+            onToggleFavorite: noop,
+            onSeekForward: noop,
+            onSeekBackward: noop,
+            onSeekForwardLarge: noop,
+            onSeekBackwardLarge: noop,
+            onHideVideo: noop,
+            onHideFolder: noop,
+            onReshuffle: noop,
+            onToggleInfo: noop,
+            child: const ColoredBox(color: Colors.red, child: Text('旧帧')),
+          ),
+        ),
+      ),
+    );
+    final origin = tester.getTopLeft(find.text('旧帧'));
+    key.currentState!.animateNext();
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    for (var frame = 0; frame < 12; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+      expect(
+        (tester.getTopLeft(find.text('旧帧')).dy - origin.dy).abs(),
+        greaterThanOrEqualTo(600),
+      );
+    }
+    opened.complete();
+    await tester.pumpAndSettle();
   });
 
   testWidgets('关闭动画时立即切换，打开结束后不移动画面', (tester) async {
@@ -140,7 +182,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 300));
     expect(switches, 1);
     final transform = tester.widget<Transform>(find.byType(Transform).first);
-    expect(transform.transform.storage[13], 0);
+    expect(transform.transform.storage[13], 600);
     expect(find.byIcon(Icons.skip_next), findsNothing);
     opened.complete();
     await tester.pump();

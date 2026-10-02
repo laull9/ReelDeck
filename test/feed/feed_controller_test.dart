@@ -269,6 +269,21 @@ void main() {
     );
     expect(slow.seeks, [10, 25]);
   });
+  test('跨轮后上一条返回实际播放的末项，再下一条回到原首项', () async {
+    final ids = feed.queue.queue;
+    feed.queue.restore(ids, ids.length - 1);
+    await feed.retry();
+    final last = feed.currentMediaId;
+    await feed.seekTo(const Duration(seconds: 13));
+    await feed.next();
+    final first = feed.currentMediaId;
+    await feed.previous();
+    expect(feed.currentMediaId, last);
+    expect(feed.player!.position, const Duration(seconds: 13));
+    await feed.next();
+    expect(feed.currentMediaId, first);
+  });
+
   test('滑到仍在预加载的下一条时复用同一解码任务', () async {
     await feed.close();
     final slow = SlowPreloadPlayer();
@@ -287,6 +302,29 @@ void main() {
     expect(slow.opens, 1);
     expect(feed.busy, false);
     expect(feed.isPlaying, true);
+  });
+
+  test('交接等待时旧视频的完成事件不能额外跳过下一条', () async {
+    await feed.close();
+    final old = FakePlayerService();
+    final slow = SlowPreloadPlayer();
+    var created = 0;
+    feed = await createFeed(
+      pool: PlayerPool(playerFactory: () => created++ == 0 ? old : slow),
+    );
+    await slow.started.future;
+    final next = feed.queue.nextId;
+    final switching = feed.next();
+    while (feed.currentMediaId != next) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    old.complete();
+    await Future<void>.delayed(Duration.zero);
+    slow.gate.complete();
+    await switching;
+    await feed.settled;
+    expect(feed.currentMediaId, next);
+    expect(feed.queueIndex, 1);
   });
 
   test('解码超时停止自动遍历，保留当前项并结束加载提示', () async {

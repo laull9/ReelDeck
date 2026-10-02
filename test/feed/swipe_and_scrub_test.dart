@@ -11,14 +11,16 @@ import 'package:reel_deck/feed/feed_controller.dart';
 import 'package:reel_deck/player/player_pool.dart';
 import 'package:reel_deck/sources/source.dart';
 import 'package:reel_deck/sources/source_manager.dart';
+
 import '../support/fake_player.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('FeedProgressBar 进度条丝滑拖动与快进测试', () {
-    testWidgets('水平拖拽平滑触发 scrubStart、scrubUpdate 与 scrubEnd，点击直接触发 onSeek',
-        (tester) async {
+    testWidgets('水平拖拽平滑触发 scrubStart、scrubUpdate 与 scrubEnd，点击直接触发 onSeek', (
+      tester,
+    ) async {
       Duration? started;
       Duration? scrubbed;
       Duration? ended;
@@ -51,7 +53,8 @@ void main() {
       expect((tapped!.inSeconds - 50).abs() <= 2, isTrue);
 
       // 拖拽手势：从左向右平滑拖拽
-      final origin = tester.getTopLeft(find.byType(FeedProgressBar)) +
+      final origin =
+          tester.getTopLeft(find.byType(FeedProgressBar)) +
           const Offset(10, 10);
       final gesture = await tester.startGesture(origin);
       await gesture.moveBy(const Offset(30, 0));
@@ -74,7 +77,9 @@ void main() {
 
   group('FeedController 拖动流控优化测试', () {
     test('拖拽中 positionStream 不覆盖拖拽位置，多次连续 scrub 只保留最新位置并节流', () async {
-      final folder = await Directory.systemTemp.createTemp('reeldeck-scrub-test');
+      final folder = await Directory.systemTemp.createTemp(
+        'reeldeck-scrub-test',
+      );
       final file = File('${folder.path}/test.mp4');
       await file.writeAsString('mock');
 
@@ -168,14 +173,14 @@ void main() {
       expect(nextCount, 0);
       expect(prevCount, 0);
 
-      // 2. 较大幅度上滑（-180 像素）：旧画面离场后触发 onNext
-      await tester.drag(find.text('当前视频内容'), const Offset(0, -180));
+      // 下滑切到下一条，动画完成后才交接。
+      await tester.drag(find.text('当前视频内容'), const Offset(0, 180));
       await tester.pumpAndSettle();
       expect(nextCount, 1);
       expect(prevCount, 0);
 
-      // 3. 较大幅度下滑（180 像素）：触发向下过渡动画，动画完成后触发 onPrevious
-      await tester.drag(find.text('当前视频内容'), const Offset(0, 180));
+      // 上滑返回上一条。
+      await tester.drag(find.text('当前视频内容'), const Offset(0, -180));
       await tester.pumpAndSettle();
       expect(nextCount, 1);
       expect(prevCount, 1);

@@ -12,15 +12,19 @@ class QueueEngine {
   int _currentIndex = -1;
   List<int>? _nextRound;
   bool? _nextRoundShuffled;
+  List<int>? _previousRound;
+  bool _currentRoundShuffled = false;
 
   void restore(List<int> ids, int index) {
     _nextRound = null;
+    _previousRound = null;
     _queue = ids.toSet().toList();
     _currentIndex = _queue.isEmpty ? -1 : index.clamp(0, _queue.length - 1);
   }
 
   void reconcile(List<int> eligible, {bool reorderPending = false}) {
     _nextRound = null;
+    _previousRound = null;
     final current = currentId;
     final allowed = eligible.toSet();
     final retained = _queue.where(allowed.contains).toList();
@@ -68,6 +72,7 @@ class QueueEngine {
   /// Builds a shuffled queue from [eligibleMediaIds] using Fisher-Yates.
   void buildQueue(List<int> eligibleMediaIds) {
     _nextRound = null;
+    _previousRound = null;
     _queue = eligibleMediaIds.toSet().toList();
     _order();
     _currentIndex = _queue.isNotEmpty ? 0 : -1;
@@ -96,7 +101,9 @@ class QueueEngine {
     if (prevIndex >= 0 && prevIndex < _queue.length) {
       return _queue[prevIndex];
     }
-    return null;
+    return _currentIndex == 0 && _previousRound?.isNotEmpty == true
+        ? _previousRound!.last
+        : null;
   }
 
   /// Advances to the next item in the queue.
@@ -113,8 +120,15 @@ class QueueEngine {
   /// Returns `true` if moved back successfully, or `false` if already at the beginning.
   bool goBack() {
     if (_currentIndex > 0) {
-      _nextRound = null;
       _currentIndex--;
+      return true;
+    }
+    if (_currentIndex == 0 && _previousRound?.isNotEmpty == true) {
+      _nextRound = _queue;
+      _nextRoundShuffled = _currentRoundShuffled;
+      _queue = _previousRound!;
+      _previousRound = null;
+      _currentIndex = _queue.length - 1;
       return true;
     }
     return false;
@@ -150,6 +164,8 @@ class QueueEngine {
   void startNextRound({required bool reshuffle}) {
     prepareNextRound(reshuffle: reshuffle);
     if (_nextRound == null) return;
+    _previousRound = _queue;
+    _currentRoundShuffled = reshuffle;
     _queue = _nextRound!;
     _nextRound = null;
     _currentIndex = 0;
@@ -159,6 +175,7 @@ class QueueEngine {
   /// If the queue has more than 1 item, avoids repeating the last played item immediately.
   void reshuffle() {
     _nextRound = null;
+    _previousRound = null;
     if (_queue.isEmpty) return;
     final previousLast = currentId;
     _order();

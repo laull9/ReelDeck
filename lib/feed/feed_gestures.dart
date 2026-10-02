@@ -13,6 +13,7 @@ class FeedGestureHandler extends StatefulWidget {
   final bool doubleTapFavorite;
   final bool keyboardEnabled;
   final bool swipeEnabled;
+  final Object? displayedMediaId;
   final Widget? topOverlay;
   final Widget? bottomOverlay;
   final FutureOr<void> Function() onNext;
@@ -40,6 +41,7 @@ class FeedGestureHandler extends StatefulWidget {
     this.doubleTapFavorite = true,
     this.keyboardEnabled = true,
     this.swipeEnabled = true,
+    this.displayedMediaId,
     this.topOverlay,
     this.bottomOverlay,
     required this.onNext,
@@ -77,6 +79,20 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
   double _horizontalDrag = 0.0;
   bool _isAnimating = false;
   DateTime _lastScrollTime = DateTime.fromMillisecondsSinceEpoch(0);
+  DateTime _lastScrollEvent = DateTime.fromMillisecondsSinceEpoch(0);
+  double _scrollDelta = 0;
+  int _lastScrollDirection = 0;
+
+  @override
+  void didUpdateWidget(covariant FeedGestureHandler oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // 画面身份在播放器就绪后才改变；新内容与归位在同一次构建中出现。
+    if (_switching &&
+        widget.displayedMediaId != null &&
+        widget.displayedMediaId != oldWidget.displayedMediaId) {
+      _dragOffset = 0;
+    }
+  }
 
   @override
   void initState() {
@@ -136,16 +152,14 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
       if (widget.animations) {
         await _animateSlide(
           _dragOffset,
-          next ? -_viewportHeight : _viewportHeight,
+          next ? _viewportHeight : -_viewportHeight,
         );
       }
       if (!mounted) return;
       final result = next ? widget.onNext() : widget.onPrevious();
-      setState(() {
-        _dragOffset = 0;
-      });
       if (result is Future<void>) await result;
     } finally {
+      if (mounted) setState(() => _dragOffset = 0);
       _switching = false;
     }
   }
@@ -161,13 +175,26 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
   void _handleScroll(PointerScrollEvent event, double height) {
     if (!widget.swipeEnabled || _isAnimating || _switching) return;
     final now = DateTime.now();
-    if (now.difference(_lastScrollTime).inMilliseconds < 350) return;
-
-    if (event.scrollDelta.dy > 20) {
-      _lastScrollTime = now;
+    final delta = event.scrollDelta.dy;
+    if (delta == 0) return;
+    final direction = delta.sign.toInt();
+    if (now.difference(_lastScrollEvent).inMilliseconds > 200 ||
+        _scrollDelta.sign != delta.sign) {
+      _scrollDelta = 0;
+    }
+    _lastScrollEvent = now;
+    _scrollDelta += delta;
+    if (_scrollDelta.abs() < 20) return;
+    if (direction == _lastScrollDirection &&
+        now.difference(_lastScrollTime).inMilliseconds < 350) {
+      return;
+    }
+    _lastScrollTime = now;
+    _lastScrollDirection = direction;
+    _scrollDelta = 0;
+    if (direction > 0) {
       animateNext(height);
-    } else if (event.scrollDelta.dy < -20) {
-      _lastScrollTime = now;
+    } else {
       animatePrevious(height);
     }
   }
@@ -177,7 +204,9 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
     KeyEvent event,
     double height,
   ) {
-    if (!widget.keyboardEnabled || !widget.swipeEnabled || event is! KeyDownEvent) {
+    if (!widget.keyboardEnabled ||
+        !widget.swipeEnabled ||
+        event is! KeyDownEvent) {
       return KeyEventResult.ignored;
     }
 
@@ -286,9 +315,9 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
                   ? (details) {
                       if (_isAnimating || _switching) return;
                       final velocity = details.primaryVelocity ?? 0;
-                      if (_dragOffset < -60 || velocity < -400) {
+                      if (_dragOffset > 60 || velocity > 400) {
                         animateNext(height);
-                      } else if (_dragOffset > 60 || velocity > 400) {
+                      } else if (_dragOffset < -60 || velocity < -400) {
                         animatePrevious(height);
                       } else {
                         _animateSlideFrom(_dragOffset);

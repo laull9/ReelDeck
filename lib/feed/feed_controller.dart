@@ -59,6 +59,7 @@ class FeedController extends ChangeNotifier {
   int _revision = -1, _positionSaved = -1, _positionNotified = -1;
   int? _openedMediaId;
   bool _completed = false;
+  bool _opening = false;
   Future<void>? _closing;
   String? _path;
   String? error;
@@ -87,6 +88,7 @@ class FeedController extends ChangeNotifier {
       'folder:${media.sourceId}:${p.posix.dirname(media.relativePath.replaceAll('\\', '/'))}';
 
   int? get currentMediaId => queue.currentId;
+  int? get displayedMediaId => _openedMediaId;
   Media? get currentMedia => _media[currentMediaId];
   String? get currentPath => _path;
   String get currentFileName => currentMedia?.fileName ?? '';

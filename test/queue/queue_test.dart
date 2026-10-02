@@ -119,6 +119,32 @@ void main() {
       expect(engine.queue, [2, 3]);
     });
 
+    test('进入下一轮后返回上一轮末项，再前进保留原来顺序', () {
+      final engine = QueueEngine(random: Random(12));
+      engine.restore([1, 2, 3], 2);
+      engine.startNextRound(reshuffle: true);
+      final newRound = engine.queue;
+      expect(engine.previousId, 3);
+      expect(engine.goBack(), true);
+      expect(engine.currentId, 3);
+      expect(engine.goBack(), true);
+      expect(engine.currentId, 2);
+      engine.advance();
+      engine.startNextRound(reshuffle: true);
+      expect(engine.queue, newRound);
+      expect(engine.currentId, newRound.first);
+    });
+
+    test('重建或扫描后清理上一轮，不能返回已移除项', () {
+      final engine = QueueEngine();
+      engine.restore([1, 2], 1);
+      engine.startNextRound(reshuffle: false);
+      expect(engine.previousId, 2);
+      engine.reconcile([1]);
+      expect(engine.previousId, isNull);
+      expect(engine.goBack(), false);
+    });
+
     test('empty queue handles methods safely', () {
       final engine = QueueEngine();
       engine.buildQueue([]);

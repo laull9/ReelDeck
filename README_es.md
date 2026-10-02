@@ -66,7 +66,7 @@ Android requiere versión 7.0 (API 24) o superior.
 
 Abra la aplicación y añada una carpeta multimedia. La reproducción comenzará tan pronto como termine el escaneo.
 
-Deslice hacia arriba para el siguiente video, deslice hacia abajo para el anterior. Toque para reproducir/pausar, doble toque para favoritos, mantenga presionado para 2x de velocidad.
+Deslice hacia abajo para el siguiente video, deslice hacia arriba para el anterior. Toque para reproducir/pausar, doble toque para favoritos, mantenga presionado para 2x de velocidad.
 
 | Atajo predeterminado | Acción |
 | --- | --- |

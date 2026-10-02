@@ -7,15 +7,15 @@ root = pathlib.Path(__file__).resolve().parent.parent
 output = root / 'build' / 'playback-smoke'
 output.mkdir(parents=True, exist_ok=True)
 entries = []
-for name, encoder, size in [
-    ('h264-long-gop', 'libx264', '320x180'),
-    ('h264-4k', 'libx264', '3840x2160'),
-    ('hevc-4k', 'libx265', '3840x2160'),
+for name, encoder, size, color in [
+    ('h264-long-gop', 'libx264', '320x180', 'red'),
+    ('h264-4k', 'libx264', '3840x2160', 'lime'),
+    ('hevc-4k', 'libx265', '3840x2160', 'blue'),
 ]:
     fixture = output / f'{name}.mp4'
     command = [
         'ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
-        f'color=c=red:size={size}:rate=30', '-t', '30', '-c:v', encoder,
+        f'color=c={color}:size={size}:rate=30', '-t', '30', '-c:v', encoder,
         '-pix_fmt', 'yuv420p', '-g', '300', '-preset', 'ultrafast', '-an',
     ]
     if encoder == 'libx264':
@@ -32,3 +32,11 @@ entry.write_text(
     "void main() => smoke.runPlaybackSmoke({\n" + '\n'.join(entries) + '\n});\n'
 )
 print(f'flutter run -d macos --release -t {entry.relative_to(root)}')
+
+transition = output / 'transition.dart'
+transition.write_text(
+    "import 'dart:convert';\n"
+    "import '../../scripts/playback_transition_smoke.dart' as smoke;\n"
+    "void main() => smoke.runTransitionSmoke({\n" + '\n'.join(entries) + '\n});\n'
+)
+print(f'flutter run -d macos --release -t {transition.relative_to(root)}')

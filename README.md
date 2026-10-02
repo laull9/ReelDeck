@@ -68,7 +68,7 @@ Android requires Android 7.0 (API 24) or newer.
 
 Launch the app and add a video directory. On Android, select a folder through SAF; on desktop, pick any local or external volume. Playback starts as soon as scanning finishes.
 
-Swipe up for next, swipe down for previous. Tap to toggle play/pause, double tap to favorite, long press for 2x speed, drag horizontally to scrub.
+Swipe down for next, swipe up for previous. Tap to toggle play/pause, double tap to favorite, long press for 2x speed, drag horizontally to scrub.
 
 | Default Shortcut | Action |
 | --- | --- |

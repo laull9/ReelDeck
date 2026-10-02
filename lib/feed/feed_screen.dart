@@ -95,6 +95,7 @@ class _FeedScreenState extends State<FeedScreen> {
             },
             child: FeedGestureHandler(
               key: _gestureKey,
+              displayedMediaId: feed.displayedMediaId,
               shortcuts: feed.settings.shortcuts,
               animations: settings.animations,
               doubleTapFavorite: settings.doubleTapFavorite,

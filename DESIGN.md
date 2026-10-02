@@ -840,10 +840,10 @@ buffer small amount
 移动端：
 
 ```text
-Swipe Up
+Swipe Down
 → Next
 
-Swipe Down
+Swipe Up
 → Previous
 
 Tap
@@ -866,10 +866,10 @@ Horizontal Drag
 触控板：
 
 ```text
-Swipe Up
+Swipe Down
 → Next
 
-Swipe Down
+Swipe Up
 → Previous
 ```
 

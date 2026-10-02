@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:provider/provider.dart';
@@ -28,7 +29,7 @@ void main() {
     expect(find.text('添加目录'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
-  testWidgets('一次上滑只切换一条，向下滑和键盘返回有效', (tester) async {
+  testWidgets('一次下滑只切换一条，向上滑和键盘返回有效', (tester) async {
     var next = 0, previous = 0;
     void noop() {}
     await tester.pumpWidget(
@@ -52,15 +53,62 @@ void main() {
         ),
       ),
     );
-    await tester.drag(find.byType(FeedGestureHandler), const Offset(0, -200));
+    await tester.drag(find.byType(FeedGestureHandler), const Offset(0, 200));
     await tester.pumpAndSettle();
     expect(next, 1);
     expect(previous, 0);
-    await tester.drag(find.byType(FeedGestureHandler), const Offset(0, 200));
+    await tester.drag(find.byType(FeedGestureHandler), const Offset(0, -200));
     await tester.pumpAndSettle();
     expect(previous, 1);
     await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
     await tester.pumpAndSettle();
     expect(next, 2);
+  });
+  testWidgets('触控板小滚动累积触发，反向滚动立即返回', (tester) async {
+    var next = 0, previous = 0;
+    void noop() {}
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: FeedGestureHandler(
+            animations: false,
+            onNext: () => next++,
+            onPrevious: () => previous++,
+            onTogglePlayPause: noop,
+            onToggleFavorite: noop,
+            onSeekForward: noop,
+            onSeekBackward: noop,
+            onSeekForwardLarge: noop,
+            onSeekBackwardLarge: noop,
+            onHideVideo: noop,
+            onHideFolder: noop,
+            onReshuffle: noop,
+            onToggleInfo: noop,
+            child: const SizedBox.expand(),
+          ),
+        ),
+      ),
+    );
+    Future<void> scroll(double delta) async {
+      await tester.sendEventToBinding(
+        PointerScrollEvent(
+          position: const Offset(200, 200),
+          scrollDelta: Offset(0, delta),
+        ),
+      );
+      await tester.pump();
+    }
+
+    await scroll(8);
+    await scroll(8);
+    expect(next, 0);
+    await scroll(8);
+    expect(next, 1);
+    await scroll(-12);
+    await scroll(-12);
+    expect(previous, 1);
+    await scroll(-30);
+    expect(previous, 1);
+    await tester.pumpAndSettle();
   });
 }
