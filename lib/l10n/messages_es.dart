@@ -71,6 +71,9 @@ const Map<String, String> messagesEs = {
   'sectionSources': 'Directorios',
   'manageVideoSources': 'Administrar carpetas de video',
   'recursiveScan': 'Escanear subcarpetas por defecto',
+  'autoRefreshFolders': 'Actualizar carpetas automáticamente',
+  'autoRefreshFoldersDesc':
+      'Volver a escanear al abrir la app o activar una carpeta',
   'preloadVideos': 'Precargar el siguiente video',
   'preloadVideosDesc': 'Prepara el siguiente video durante la reproducción para reducir la espera al deslizar',
   'externalDriveOptimization': 'Optimización para HDD externo',

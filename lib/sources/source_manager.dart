@@ -25,6 +25,9 @@ class SourceManager extends ChangeNotifier {
   int _nextMediaId = 1;
   bool recursive = true;
 
+  /// 启用目录时自动重扫，由设置同步。
+  bool autoRefresh = false;
+
   SourceManager({SourceScanner? scanner, SourceResolver? resolver, this.store})
     : _scanner = scanner ?? SourceScanner(),
       _resolver = resolver ?? DefaultResolver();
@@ -115,7 +118,8 @@ class SourceManager extends ChangeNotifier {
     return updated;
   }
 
-  Future<void> scanSource(Source source) async {
+  /// [quiet] 用于后台自动刷新：目录未连接时保留旧索引，不弹出错误。
+  Future<void> scanSource(Source source, {bool quiet = false}) async {
     if (_isScanning) return;
     _isScanning = true;
     error = null;
@@ -181,16 +185,16 @@ class SourceManager extends ChangeNotifier {
       await store?.saveSource(updated);
       revision++;
     } catch (e) {
-      error = '扫描 ${source.name} 失败：$e';
+      if (!quiet) error = '扫描 ${source.name} 失败：$e';
     } finally {
       _isScanning = false;
       _notify();
     }
   }
 
-  Future<void> rescanAll() async {
+  Future<void> rescanAll({bool quiet = false}) async {
     for (final source in _sources.where((s) => s.enabled).toList()) {
-      await scanSource(source);
+      await scanSource(source, quiet: quiet);
     }
   }
 
@@ -209,6 +213,7 @@ class SourceManager extends ChangeNotifier {
     _sources[index] = source;
     await store?.saveSource(source);
     _notify(changed: true);
+    if (source.enabled && autoRefresh) await scanSource(source);
   }
 
   Future<void> setRecursive(int sourceId, bool recursive) async {

@@ -1,7 +1,7 @@
 name: reel_deck
 description: "Pick a folder. Shuffle. Swipe."
 publish_to: 'none'
-version: 0.4.1+6
+version: 0.5.0+7
 
 environment:
   sdk: ^3.13.4

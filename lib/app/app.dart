@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -32,6 +33,8 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
   late final FeedController feed;
   late Future<void> _startup;
   bool _awake = false;
+  bool _started = false;
+  bool _backgrounded = false;
 
   @override
   void initState() {
@@ -53,8 +56,18 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
     await directory.create(recursive: true);
     await settings.load(File('${directory.path}/settings.json'));
     sources.recursive = settings.recursiveScan;
+    sources.autoRefresh = settings.autoRefreshFolders;
     await sources.initialize();
     await feed.initialize();
+    _started = true;
+    _refreshFolders();
+  }
+
+  /// 先按已有索引开始播放，再在后台重扫；当前视频仍在时不打断播放。
+  void _refreshFolders() {
+    if (_started && settings.autoRefreshFolders) {
+      unawaited(sources.rescanAll(quiet: true));
+    }
   }
 
   void _syncWakelock() {
@@ -70,6 +83,14 @@ class _ReelDeckAppState extends State<ReelDeckApp> with WidgetsBindingObserver {
         state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
       feed.suspend();
+    }
+    // 只有真正退到后台再回来才算重新打开；桌面失焦不触发重扫。
+    if (state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused) {
+      _backgrounded = true;
+    } else if (state == AppLifecycleState.resumed && _backgrounded) {
+      _backgrounded = false;
+      _refreshFolders();
     }
   }
 

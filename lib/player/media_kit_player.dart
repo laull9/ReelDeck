@@ -94,6 +94,7 @@ class MediaKitPlayerService implements PlayerService {
   }
 
   Future<void> setRate(double rate) => _player.setRate(rate);
+  bool get isBuffering => _player.state.buffering;
   Stream<String> get errors => _player.stream.error;
 
   @override

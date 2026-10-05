@@ -17,6 +17,11 @@
   <p><a href="https://github.com/laull9/ReelDeck/releases">Downloads</a> · <a href="DESIGN.md">Product Design</a> · <a href="docs/releases.md">Build & Release</a> · <a href="TODO.md">Device Verification</a></p>
 </div>
 
+<p align="center">
+  <img src="docs/media/demo-en.gif" width="240" alt="ReelDeck demo: swipe between videos, favorite, switch scope, and open settings" />
+</p>
+<p align="center"><sub>Demo footage: excerpts from <em>Big Buck Bunny</em>, <em>Sintel</em>, and <em>Tears of Steel</em> © Blender Foundation, <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>. Regenerate with <code>python3 scripts/record_readme_demo.py</code>.</sub></p>
+
 ReelDeck plays your original files directly. It supports local drives, external disks, and Android Storage Access Framework (SAF) folders, building a lightweight recursive index and playing media in non-repeating rounds. No accounts, no cloud sync, no uploads, and no analytics.
 
 ## Features
@@ -29,7 +34,7 @@ ReelDeck plays your original files directly. It supports local drives, external 
 - **Video Controls**: Play/pause, scrub progress bar, temporary 2x speed hold, mute, fullscreen, and 3 display modes (Fit, Fill/Cover, Original Size).
 - **Resume Where You Left Off**: Restores current queue, position, favorites, and hidden states on app restart.
 - **Images & GIFs**: Optional photo and GIF support with customizable display timer, pause, and seekable progress bar.
-- **Folder Management**: Multi-source folders, manual rescan, and per-folder recursive options. Gracefully handles unmounted drives and skips broken media files.
+- **Folder Management**: Multi-source folders, automatic rescan when the app opens or a folder is enabled (can be turned off), manual rescan, and per-folder recursive options. Gracefully handles unmounted drives and skips broken media files.
 - **File Actions**: Reveal in desktop file manager, confirm to move to system trash. (Android SAF uses folder-level hide).
 - **Clean UI**: Full info, progress bar only, or no overlay. Touch or mouse movement brings up controls; customizable keyboard shortcuts.
 - **Internationalization**: Follows system locale automatically or can be configured in settings (English, Simplified Chinese, Japanese, Spanish, French).

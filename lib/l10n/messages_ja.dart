@@ -71,6 +71,9 @@ const Map<String, String> messagesJa = {
   'sectionSources': 'ディレクトリ',
   'manageVideoSources': '動画フォルダを管理',
   'recursiveScan': 'サブフォルダもデフォルトでスキャン',
+  'autoRefreshFolders': 'フォルダを自動更新',
+  'autoRefreshFoldersDesc':
+      'アプリ起動時やフォルダ有効化時に内容を再スキャン',
   'preloadVideos': '次の動画を先読み',
   'preloadVideosDesc': '再生中に次の動画を準備し、スワイプ後の待ち時間を短縮',
   'externalDriveOptimization': '外付けHDD最適化',

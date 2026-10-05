@@ -34,6 +34,8 @@ extension FeedPlayback on FeedController {
   Future<void> _unbind() async {
     _imageClock?.cancel();
     _imageClock = null;
+    _stallClock?.cancel();
+    _stallClock = null;
     for (final sub in _subscriptions) {
       await sub.cancel();
     }
@@ -78,12 +80,15 @@ extension FeedPlayback on FeedController {
         _notify();
       }),
       active.completedStream.listen((done) {
-        if (done && !busy && !_opening && _openedMediaId == id) {
-          _completed = true;
-          next();
-        }
+        // 打开期间也接受新视频自己的结束事件；旧视频的事件靠身份过滤。
+        if (!done || _openedMediaId != id || currentMediaId != id) return;
+        _completed = true;
+        _run(() async {
+          if (currentMediaId == id) await _advance();
+        });
       }),
     ]);
+    _watchStall(active, id);
     if (active is MediaKitPlayerService) {
       _subscriptions.add(
         active.errors.listen((message) {
@@ -95,6 +100,34 @@ extension FeedPlayback on FeedController {
         }),
       );
     }
+  }
+
+  /// 损坏帧或解码跟不上时进度不再前进，超时后按损坏文件处理并跳过。
+  void _watchStall(PlayerService active, int id) {
+    var last = active.position;
+    var ticks = 0;
+    _stallClock = Timer.periodic(stallTimeout ~/ 5, (_) {
+      if (_disposed ||
+          busy ||
+          _isScrubbing ||
+          _openedMediaId != id ||
+          !identical(player, active) ||
+          !active.isPlaying ||
+          active.position != last) {
+        last = active.position;
+        ticks = 0;
+        return;
+      }
+      // 外置盘或网络缓冲给三倍时间，仍不动再判定为停滞。
+      final buffering = active is MediaKitPlayerService && active.isBuffering;
+      if (++ticks < (buffering ? 15 : 5)) return;
+      _stallClock?.cancel();
+      _run(() async {
+        if (_openedMediaId != id || !identical(player, active)) return;
+        await active.pause();
+        await _recover('无法播放 $currentFileName：解码停滞');
+      });
+    });
   }
 
   Future<void> _recover(String message, {bool skip = true}) async {
@@ -129,7 +162,12 @@ extension FeedPlayback on FeedController {
 
   Future<void> _openMedia() async {
     // 滑到正在预加载的目标时接管同一任务，避免取消后再次解码。
+    // 损坏或高码率视频可能等满超时，等待期间显示加载提示。
     if (_preloadMediaId == currentMediaId) {
+      if (_preloading) {
+        busy = true;
+        _notify();
+      }
       await _preloadTask;
     }
     _preloadGeneration++;
@@ -159,6 +197,12 @@ extension FeedPlayback on FeedController {
     final resolved = await sourceManager?.resolveMediaPath(media);
     if (resolved == null) {
       await _recover('视频或目录无法访问，请连接磁盘后重试，或重新授权目录。');
+      return;
+    }
+    // 预加载已确认文件损坏时直接跳过；超时可能只是后台软解太慢，前台再试一次。
+    final preloadError = _preloadErrors.remove(media.id);
+    if (preloadError != null && preloadError is! TimeoutException) {
+      await _recover('视频打开失败：$preloadError');
       return;
     }
 
@@ -210,6 +254,7 @@ extension FeedPlayback on FeedController {
         position = player?.position ?? start;
         duration = player?.duration ?? Duration.zero;
         _positionSaved = position.inSeconds ~/ 5;
+        _completed = false;
         _bind();
         if (isPreloaded && player is MediaKitPlayerService) {
           // Android 后台软解先准备首帧，交接释放旧硬解后再启用前台硬解。
@@ -253,7 +298,9 @@ extension FeedPlayback on FeedController {
     if (next != null &&
         !SourceScanner.imageExtensions.contains(next.extension)) {
       _preloadMediaId = next.id;
-      _preloadTask = () async {
+      _preloading = true;
+      late final Future<void> task;
+      _preloadTask = task = () async {
         try {
           final nextPath = await sourceManager?.resolveMediaPath(next);
           if (nextPath != null &&
@@ -273,7 +320,13 @@ extension FeedPlayback on FeedController {
               await pool.preloadNext(nextPath, start: nextStart);
             }
           }
-        } catch (_) {}
+        } catch (e) {
+          // 被释放或替换的预加载不算文件损坏。
+          if (generation == _preloadGeneration) _preloadErrors[next.id] = e;
+        } finally {
+          // 只有最新的预加载结束才清除标记。
+          if (identical(_preloadTask, task)) _preloading = false;
+        }
       }();
     }
   }

@@ -121,6 +121,8 @@ class AppLocalizations {
   String get sectionSources => get('sectionSources');
   String get manageVideoSources => get('manageVideoSources');
   String get recursiveScan => get('recursiveScan');
+  String get autoRefreshFolders => get('autoRefreshFolders');
+  String get autoRefreshFoldersDesc => get('autoRefreshFoldersDesc');
   String get preloadVideos => get('preloadVideos');
   String get preloadVideosDesc => get('preloadVideosDesc');
   String get externalDriveOptimization => get('externalDriveOptimization');

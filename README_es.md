@@ -17,6 +17,11 @@
   <p><a href="https://github.com/laull9/ReelDeck/releases">Descargas</a> · <a href="DESIGN.md">Diseño de producto</a> · <a href="docs/releases.md">Compilación y lanzamiento</a> · <a href="TODO.md">Verificación</a></p>
 </div>
 
+<p align="center">
+  <img src="docs/media/demo-es.gif" width="240" alt="Demostración de ReelDeck: deslizar entre videos, favoritos, cambiar el alcance y abrir ajustes" />
+</p>
+<p align="center"><sub>Material de demostración: fragmentos de <em>Big Buck Bunny</em>, <em>Sintel</em> y <em>Tears of Steel</em> © Blender Foundation, <a href="https://creativecommons.org/licenses/by/3.0/deed.es">CC BY 3.0</a>. Para regenerarlo: <code>python3 scripts/record_readme_demo.py</code>.</sub></p>
+
 ReelDeck reproduce tus archivos originales directamente. Admite carpetas locales, discos externos y carpetas autorizadas de Android (SAF), creando un índice ligero y reproduciendo en rondas sin repeticiones. Sin cuentas, sin sincronización en la nube y sin recopilación de datos.
 
 ## Características
@@ -29,7 +34,7 @@ ReelDeck reproduce tus archivos originales directamente. Admite carpetas locales
 - **Control de video**: Reproducir/pausar, barra de progreso interactiva, velocidad 2x al mantener presionado, silencio, pantalla completa y 3 modos de ajuste de video.
 - **Reanudación**: Restaura la cola actual, la posición, favoritos y videos ocultos al reiniciar la aplicación.
 - **Imágenes y GIF**: Soporte opcional con temporizador configurable, pausa y barra de avance.
-- **Gestión de fuentes**: Múltiples fuentes, reescaneo manual y configuración recursiva por carpeta. Manejo seguro de discos desconectados.
+- **Gestión de fuentes**: Múltiples fuentes, actualización automática al abrir la app o activar una carpeta (desactivable), reescaneo manual y configuración recursiva por carpeta. Manejo seguro de discos desconectados.
 - **Acciones de archivo**: Mostrar en el explorador de archivos y mover a la papelera del sistema en escritorio (en Android se recomienda ocultar).
 - **Interfaz limpia**: Modos de información completa, solo barra o sin interfaz. Atajos de teclado totalmente configurables.
 - **Internacionalización**: Detección automática del idioma del sistema o selección manual en ajustes (Inglés, Chino simplificado, Japonés, Español, Francés).

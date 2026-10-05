@@ -17,6 +17,11 @@
   <p><a href="https://github.com/laull9/ReelDeck/releases">Téléchargements</a> · <a href="DESIGN.md">Conception du produit</a> · <a href="docs/releases.md">Build & Publication</a> · <a href="TODO.md">Vérifications</a></p>
 </div>
 
+<p align="center">
+  <img src="docs/media/demo-fr.gif" width="240" alt="Démo de ReelDeck : balayer entre les vidéos, favoris, changer de portée et ouvrir les réglages" />
+</p>
+<p align="center"><sub>Séquences de démonstration : extraits de <em>Big Buck Bunny</em>, <em>Sintel</em> et <em>Tears of Steel</em> © Blender Foundation, <a href="https://creativecommons.org/licenses/by/3.0/deed.fr">CC BY 3.0</a>. Pour régénérer : <code>python3 scripts/record_readme_demo.py</code>.</sub></p>
+
 ReelDeck lit directement vos fichiers multimédias originaux. Compatible avec les disques locaux, les disques durs externes et les dossiers Android SAF, il indexe rapidement votre contenu et lit les vidéos en boucle aléatoire sans doublon. Pas de compte, pas de synchronisation cloud, pas de télémétrie.
 
 ## Fonctionnalités
@@ -29,7 +34,7 @@ ReelDeck lit directement vos fichiers multimédias originaux. Compatible avec le
 - **Contrôles vidéo** : Lecture/pause, barre de progression interactive, vitesse x2 temporaire sur appui long, muet, plein écran et 3 modes d'affichage.
 - **Reprise de lecture** : Conserve la file actuelle, la position de lecture, les favoris et les dossiers masqués.
 - **Images & GIF** : Prise en charge optionnelle avec minuterie configurable, pause et défilement.
-- **Gestion des dossiers** : Multi-dossiers, réanalyse manuelle, gestion souple des volumes déconnectés.
+- **Gestion des dossiers** : Multi-dossiers, actualisation automatique à l’ouverture de l’app ou à l’activation d’un dossier (désactivable), réanalyse manuelle, gestion souple des volumes déconnectés.
 - **Actions de fichiers** : Afficher dans l'explorateur de fichiers et déplacer vers la corbeille système sur ordinateur.
 - **Interface épurée** : Informations complètes, barre seule ou sans interface. Raccourcis clavier entièrement configurables.
 - **Multilingue** : Détection automatique de la langue du système ou sélection manuelle dans les paramètres (anglais, chinois simplifié, japonais, espagnol, français).

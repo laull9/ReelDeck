@@ -71,6 +71,9 @@ const Map<String, String> messagesFr = {
   'sectionSources': 'Dossiers',
   'manageVideoSources': 'Gérer les dossiers vidéo',
   'recursiveScan': 'Analyser les sous-dossiers par défaut',
+  'autoRefreshFolders': 'Actualiser les dossiers automatiquement',
+  'autoRefreshFoldersDesc':
+      'Réanalyser à l’ouverture de l’app ou à l’activation d’un dossier',
   'preloadVideos': 'Précharger la vidéo suivante',
   'preloadVideosDesc': 'Prépare la vidéo suivante pendant la lecture pour réduire l’attente après un balayage',
   'externalDriveOptimization': 'Optimisation pour disque dur externe',

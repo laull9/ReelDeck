@@ -17,6 +17,11 @@
   <p><a href="https://github.com/laull9/ReelDeck/releases">下载</a> · <a href="DESIGN.md">产品设计</a> · <a href="docs/releases.md">构建与发布</a> · <a href="TODO.md">设备验收</a></p>
 </div>
 
+<p align="center">
+  <img src="docs/media/demo-zh.gif" width="240" alt="ReelDeck 演示：上下滑动切换、收藏、切换播放范围、打开设置" />
+</p>
+<p align="center"><sub>演示素材：<em>Big Buck Bunny</em>、<em>Sintel</em>、<em>Tears of Steel</em> 片段，© Blender Foundation，<a href="https://creativecommons.org/licenses/by/3.0/deed.zh-hans">CC BY 3.0</a>。重新录制：<code>python3 scripts/record_readme_demo.py</code>。</sub></p>
+
 ReelDeck 直接播放原文件。支持本机目录、移动硬盘和 Android 授权目录，递归建立轻量索引，再按一轮不重复的顺序播放。没有账号、云同步、上传或使用统计。
 
 ## 功能
@@ -29,7 +34,7 @@ ReelDeck 直接播放原文件。支持本机目录、移动硬盘和 Android �
 - **视频控制**：播放、暂停、拖动进度、临时倍速、静音、全屏，以及完整显示、填满画面、原始尺寸三种显示方式。
 - **继续播放**：保存当前队列、播放位置、收藏和隐藏记录。关闭再打开，接着当前一轮播放。
 - **图片与 GIF**：在设置中开启，按停留时间播放，也能暂停或拖动计时进度。默认只播放视频。
-- **目录维护**：多个来源、手动重扫、每个来源独立选择递归扫描。目录断开时暂停，重连后可重试；单个坏文件自动跳过。
+- **目录维护**：多个来源、打开应用或启用目录时自动刷新（可关闭）、手动重扫、每个来源独立选择递归扫描。目录断开时暂停，重连后可重试；单个坏文件自动跳过。
 - **文件操作**：桌面端在文件管理器中定位、确认后移入系统回收站。Android SAF 没有统一回收站，请使用隐藏或文档提供方的文件管理器。
 - **精简显示**：完整信息、仅进度、无浮层。移动鼠标或轻触唤出控制；支持关闭动画、双击收藏和键盘控制，快捷键可自定义。
 - **多语言支持**：跟随系统语言自动匹配，也支持在设置中手动切换（支持英语、简体中文、日语、西班牙语、法语）。

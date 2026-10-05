@@ -71,6 +71,9 @@ const Map<String, String> messagesZh = {
   'sectionSources': '目录',
   'manageVideoSources': '管理视频目录',
   'recursiveScan': '新目录默认扫描子目录',
+  'autoRefreshFolders': '自动刷新目录',
+  'autoRefreshFoldersDesc':
+      '打开应用或启用目录时重新扫描目录内容',
   'preloadVideos': '预加载下一条视频',
   'preloadVideosDesc': '播放当前视频时准备下一条，减少滑动后的等待',
   'externalDriveOptimization': '外置机械硬盘优化',

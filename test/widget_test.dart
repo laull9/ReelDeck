@@ -29,6 +29,26 @@ void main() {
     expect(find.text('添加目录'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+  testWidgets('播放页顶栏不显示品牌图标，宽屏保留名称', (tester) async {
+    tester.view.physicalSize = const Size(900, 700);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final sources = SourceManager();
+    final feed = FeedController(sourceManager: sources);
+    await tester.pumpWidget(
+      MultiProvider(
+        providers: [
+          ChangeNotifierProvider.value(value: sources),
+          ChangeNotifierProvider.value(value: feed),
+        ],
+        child: const MaterialApp(home: FeedScreen()),
+      ),
+    );
+    expect(find.text('ReelDeck'), findsOneWidget);
+    expect(find.byType(Image), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
   testWidgets('滑到下方进入下一条，滑回上方和键盘返回有效', (tester) async {
     var next = 0, previous = 0;
     void noop() {}

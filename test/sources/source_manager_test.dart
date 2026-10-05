@@ -126,5 +126,55 @@ void main() {
       manager.toggleSource(1);
       expect(manager.sources.first.enabled, true);
     });
+
+    test('启用目录时自动重扫，关闭自动刷新则不扫描', () async {
+      await File(p.join(tempDir.path, 'video1.mp4')).create();
+      final subDir = await Directory(p.join(tempDir.path, 'subdir')).create();
+      await File(p.join(subDir.path, 'video2.mkv')).create();
+      final source = Source(
+        id: 1,
+        name: 'Test',
+        locator: tempDir.path,
+        lastKnownPath: tempDir.path,
+        platform: 'test',
+        enabled: false,
+      );
+      manager.addSource(source);
+      await manager.toggleSource(1);
+      await manager.toggleSource(1);
+      expect(manager.allMedia, isEmpty);
+
+      manager.autoRefresh = true;
+      await manager.toggleSource(1);
+      expect(manager.sources.first.enabled, true);
+      expect(manager.allMedia.length, 2);
+      final revision = manager.revision;
+      await manager.toggleSource(1);
+      expect(manager.sources.first.enabled, false);
+      expect(manager.revision, revision + 1);
+    });
+
+    test('后台刷新目录未连接时保留索引且不报错', () async {
+      await File(p.join(tempDir.path, 'video1.mp4')).create();
+      final subDir = await Directory(p.join(tempDir.path, 'subdir')).create();
+      await File(p.join(subDir.path, 'video2.mkv')).create();
+      final source = Source(
+        id: 1,
+        name: 'Test',
+        locator: tempDir.path,
+        lastKnownPath: tempDir.path,
+        platform: 'test',
+      );
+      manager.addSource(source);
+      await manager.rescanAll(quiet: true);
+      expect(manager.allMedia.length, 2);
+
+      resolver.isAvailable = false;
+      await manager.rescanAll(quiet: true);
+      expect(manager.error, isNull);
+      expect(manager.allMedia.length, 2);
+      await manager.rescanAll();
+      expect(manager.error, isNotNull);
+    });
   });
 }

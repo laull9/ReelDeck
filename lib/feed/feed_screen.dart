@@ -205,7 +205,9 @@ class _FeedScreenState extends State<FeedScreen> {
                         ),
                       ),
                     ),
-                  if (feed.busy || sources.isScanning)
+                  // 后台刷新目录时继续播放，不遮挡当前视频。
+                  if (feed.busy ||
+                      (sources.isScanning && feed.currentMediaId == null))
                     const Center(child: CircularProgressIndicator()),
                   if (error != null)
                     Center(
@@ -252,7 +254,7 @@ class _FeedScreenState extends State<FeedScreen> {
                       right: 8,
                       child: Row(
                         children: [
-                          if (MediaQuery.sizeOf(context).width > 480)
+                          if (MediaQuery.sizeOf(context).width > 480) ...[
                             const Text(
                               'ReelDeck',
                               style: TextStyle(
@@ -260,14 +262,8 @@ class _FeedScreenState extends State<FeedScreen> {
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: Image.asset(
-                              'assets/icon/app_icon.png',
-                              width: 32,
-                              height: 32,
-                            ),
-                          ),
+                            const SizedBox(width: 12),
+                          ],
                           Expanded(
                             child: ScopePicker(feed: feed, sources: sources),
                           ),

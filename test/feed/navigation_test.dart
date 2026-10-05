@@ -178,4 +178,17 @@ void main() {
     expect(feed.canGoNext, false);
     expect(feed.canGoPrevious, true);
   });
+
+  test('切换范围后首项仍是当前视频时不重新打开，继续播放', () async {
+    final current = feed.currentMediaId;
+    final player = feed.player as FakePlayerService;
+    final opens = player.opens;
+    await feed.toggleFavorite();
+    await feed.setScope('favorites');
+    expect(feed.currentMediaId, current);
+    expect(feed.player, same(player));
+    expect(player.opens, opens);
+    expect(feed.isPlaying, true);
+    expect(feed.busy, false);
+  });
 }

@@ -45,6 +45,12 @@ class FeedController extends ChangeNotifier {
   bool _preloadSetting = true;
   int _preloadGeneration = 0;
   int? _preloadMediaId;
+  bool _preloading = false;
+  final Map<int, Object> _preloadErrors = {};
+  Timer? _stallClock;
+
+  /// 播放中进度持续不变超过此时间视为解码停滞。
+  Duration stallTimeout = const Duration(seconds: 10);
   String _decoderSetting = 'auto';
   double _volumeSetting = 1;
   bool _driveSetting = true;
@@ -229,6 +235,7 @@ class FeedController extends ChangeNotifier {
     _run(() async {
       final previous = currentMediaId;
       _failed.clear();
+      _preloadErrors.clear();
       _refreshMedia();
       _reconcileQueue(
         sortPending: ['newest', 'oldest'].contains(settings.queueOrder),
@@ -254,6 +261,7 @@ class FeedController extends ChangeNotifier {
       });
     }
     sourceManager?.recursive = settings.recursiveScan;
+    sourceManager?.autoRefresh = settings.autoRefreshFolders;
     final decoderChanged = _decoderSetting != settings.decoderMode;
     final preloadChanged = _preloadSetting != settings.preloadNext;
     final releaseNext = _preloadSetting && !settings.preloadNext;
@@ -313,7 +321,9 @@ class FeedController extends ChangeNotifier {
       settings.reshuffleAfterRound &&
       ['shuffle', 'smart'].contains(settings.queueOrder);
 
-  Future<void> next() => _run(() async {
+  Future<void> next() => _run(_advance);
+
+  Future<void> _advance() async {
     await _savePosition();
     if (!queue.advance()) {
       if (!settings.loopQueue || queue.queue.isEmpty) {
@@ -324,7 +334,8 @@ class FeedController extends ChangeNotifier {
       queue.startNextRound(reshuffle: _shuffleRound);
     }
     await _open();
-  });
+  }
+
   Future<void> previous() => _run(() async {
     if (queue.previousId == null) return;
     await _savePosition();
@@ -339,6 +350,7 @@ class FeedController extends ChangeNotifier {
   Future<void> retry() => _run(() async {
     await _savePosition();
     _failed.clear();
+    _preloadErrors.clear();
     _reconcileQueue();
     await _open();
   });
@@ -346,6 +358,13 @@ class FeedController extends ChangeNotifier {
     await _savePosition();
     scope = value;
     queue.buildQueue(_eligible());
+    // 新范围首项仍是当前视频时继续播放，只更新会话和预加载，避免黑屏重开。
+    if (_path != null && currentMediaId == _openedMediaId) {
+      _preloadGeneration++;
+      _preloadNeighbors();
+      await _saveSession();
+      return;
+    }
     await _open();
   });
   Future<void> togglePlayPause() => _run(() async {

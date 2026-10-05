@@ -5,6 +5,7 @@ import '../app/routes.dart';
 import '../feed/feed_controller.dart';
 import '../feed/widgets/playback_errors.dart';
 import '../l10n/app_localizations.dart';
+import 'choice_tile.dart';
 import 'settings.dart';
 
 class SettingsScreen extends StatelessWidget {
@@ -30,20 +31,20 @@ class SettingsScreen extends StatelessWidget {
             value: settings.loopQueue,
             onChanged: (val) => settings.update(loopQueue: val),
           ),
-          ListTile(
-            title: Text(l10n.videoFit),
-            trailing: DropdownButton<String>(
-              value: settings.videoFit,
-              underline: const SizedBox(),
-              items: [
-                DropdownMenuItem(value: 'fit', child: Text(l10n.fitContain)),
-                DropdownMenuItem(value: 'fill', child: Text(l10n.fitCover)),
-                DropdownMenuItem(value: 'original', child: Text(l10n.fitOriginal)),
-              ],
-              onChanged: (val) {
-                if (val != null) settings.update(videoFit: val);
-              },
-            ),
+          ChoiceTile<String>(
+            title: l10n.videoFit,
+            value: settings.videoFit,
+            items: [
+              DropdownMenuItem(value: 'fit', child: Text(l10n.fitContain)),
+              DropdownMenuItem(value: 'fill', child: Text(l10n.fitCover)),
+              DropdownMenuItem(
+                value: 'original',
+                child: Text(l10n.fitOriginal),
+              ),
+            ],
+            onChanged: (val) {
+              if (val != null) settings.update(videoFit: val);
+            },
           ),
           SwitchListTile(
             title: Text(l10n.rememberPosition),
@@ -62,42 +63,37 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           _buildSectionHeader(l10n.decoderSection),
-          ListTile(
-            title: Text(l10n.decoderMode),
-            trailing: DropdownButton<String>(
-              value: settings.decoderMode,
-              underline: const SizedBox(),
-              items: [
-                DropdownMenuItem(value: 'auto', child: Text(l10n.decoderAuto)),
-                DropdownMenuItem(
-                  value: 'auto-safe',
-                  child: Text(l10n.decoderAutoSafe),
-                ),
-                DropdownMenuItem(
-                  value: 'no',
-                  child: Text(l10n.decoderSoftware),
-                ),
-              ],
-              onChanged: (val) {
-                if (val != null) settings.update(decoderMode: val);
-              },
-            ),
+          ChoiceTile<String>(
+            title: l10n.decoderMode,
+            value: settings.decoderMode,
+            items: [
+              DropdownMenuItem(value: 'auto', child: Text(l10n.decoderAuto)),
+              DropdownMenuItem(
+                value: 'auto-safe',
+                child: Text(l10n.decoderAutoSafe),
+              ),
+              DropdownMenuItem(value: 'no', child: Text(l10n.decoderSoftware)),
+            ],
+            onChanged: (val) {
+              if (val != null) settings.update(decoderMode: val);
+            },
           ),
 
           _buildSectionHeader(l10n.sectionQueue),
-          ListTile(
-            title: Text(l10n.queueOrder),
-            subtitle: Text(l10n.queueOrderDesc),
-            trailing: DropdownButton<String>(
-              value: settings.queueOrder,
-              items: [
-                DropdownMenuItem(value: 'shuffle', child: Text(l10n.orderShuffle)),
-                DropdownMenuItem(value: 'smart', child: Text(l10n.orderSmart)),
-                DropdownMenuItem(value: 'newest', child: Text(l10n.orderNewest)),
-                DropdownMenuItem(value: 'oldest', child: Text(l10n.orderOldest)),
-              ],
-              onChanged: (value) => settings.update(queueOrder: value),
-            ),
+          ChoiceTile<String>(
+            title: l10n.queueOrder,
+            subtitle: l10n.queueOrderDesc,
+            value: settings.queueOrder,
+            items: [
+              DropdownMenuItem(
+                value: 'shuffle',
+                child: Text(l10n.orderShuffle),
+              ),
+              DropdownMenuItem(value: 'smart', child: Text(l10n.orderSmart)),
+              DropdownMenuItem(value: 'newest', child: Text(l10n.orderNewest)),
+              DropdownMenuItem(value: 'oldest', child: Text(l10n.orderOldest)),
+            ],
+            onChanged: (value) => settings.update(queueOrder: value),
           ),
           SwitchListTile(
             title: Text(l10n.reshuffleAfterRound),
@@ -131,6 +127,12 @@ class SettingsScreen extends StatelessWidget {
             onTap: () => Navigator.pushNamed(context, AppRoutes.sources),
           ),
           SwitchListTile(
+            title: Text(l10n.autoRefreshFolders),
+            subtitle: Text(l10n.autoRefreshFoldersDesc),
+            value: settings.autoRefreshFolders,
+            onChanged: (val) => settings.update(autoRefreshFolders: val),
+          ),
+          SwitchListTile(
             title: Text(l10n.recursiveScan),
             value: settings.recursiveScan,
             onChanged: (val) => settings.update(recursiveScan: val),
@@ -150,18 +152,19 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           _buildSectionHeader(l10n.sectionDisplay),
-          ListTile(
-            title: Text(l10n.overlayMode),
-            subtitle: Text(l10n.overlayModeDesc),
-            trailing: DropdownButton<String>(
-              value: settings.overlayMode,
-              items: [
-                DropdownMenuItem(value: 'full', child: Text(l10n.overlayFull)),
-                DropdownMenuItem(value: 'progress', child: Text(l10n.overlayProgress)),
-                DropdownMenuItem(value: 'none', child: Text(l10n.overlayNone)),
-              ],
-              onChanged: (value) => settings.update(overlayMode: value),
-            ),
+          ChoiceTile<String>(
+            title: l10n.overlayMode,
+            subtitle: l10n.overlayModeDesc,
+            value: settings.overlayMode,
+            items: [
+              DropdownMenuItem(value: 'full', child: Text(l10n.overlayFull)),
+              DropdownMenuItem(
+                value: 'progress',
+                child: Text(l10n.overlayProgress),
+              ),
+              DropdownMenuItem(value: 'none', child: Text(l10n.overlayNone)),
+            ],
+            onChanged: (value) => settings.update(overlayMode: value),
           ),
           SwitchListTile(
             title: Text(l10n.animations),
@@ -215,26 +218,23 @@ class SettingsScreen extends StatelessWidget {
           ),
 
           _buildSectionHeader(l10n.sectionLanguage),
-          ListTile(
-            title: Text(l10n.language),
-            trailing: DropdownButton<String>(
-              value: settings.locale,
-              underline: const SizedBox(),
-              items: [
-                DropdownMenuItem(
-                  value: 'system',
-                  child: Text(l10n.languageSystem),
-                ),
-                const DropdownMenuItem(value: 'en', child: Text('English')),
-                const DropdownMenuItem(value: 'zh', child: Text('简体中文')),
-                const DropdownMenuItem(value: 'ja', child: Text('日本語')),
-                const DropdownMenuItem(value: 'es', child: Text('Español')),
-                const DropdownMenuItem(value: 'fr', child: Text('Français')),
-              ],
-              onChanged: (val) {
-                if (val != null) settings.update(locale: val);
-              },
-            ),
+          ChoiceTile<String>(
+            title: l10n.language,
+            value: settings.locale,
+            items: [
+              DropdownMenuItem(
+                value: 'system',
+                child: Text(l10n.languageSystem),
+              ),
+              const DropdownMenuItem(value: 'en', child: Text('English')),
+              const DropdownMenuItem(value: 'zh', child: Text('简体中文')),
+              const DropdownMenuItem(value: 'ja', child: Text('日本語')),
+              const DropdownMenuItem(value: 'es', child: Text('Español')),
+              const DropdownMenuItem(value: 'fr', child: Text('Français')),
+            ],
+            onChanged: (val) {
+              if (val != null) settings.update(locale: val);
+            },
           ),
 
           ListTile(
@@ -248,7 +248,7 @@ class SettingsScreen extends StatelessWidget {
           ListTile(
             title: const Text('ReelDeck'),
             subtitle: Text(l10n.appDescription),
-            trailing: const Text('v0.3.0'),
+            trailing: const Text('v0.5.0'),
           ),
         ],
       ),

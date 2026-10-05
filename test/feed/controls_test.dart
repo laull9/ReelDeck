@@ -73,6 +73,14 @@ void main() {
     await tester.pump();
     expect(tester.takeException(), isNull);
     expect(find.text('clip.mp4'), findsOneWidget);
+    // 窄屏控制栏保持单行，音量不被挤到下一行。
+    final play = tester.getCenter(find.byTooltip('暂停'));
+    final volume = tester.getCenter(find.byTooltip('静音'));
+    expect((volume.dy - play.dy).abs(), lessThan(1));
+    // 控制栏按钮水平居中。
+    final prevLeft = tester.getTopLeft(find.byTooltip('上一条')).dx;
+    final volRight = tester.getTopRight(find.byTooltip('静音')).dx;
+    expect(((prevLeft + volRight) / 2 - 160).abs(), lessThan(1));
     await tester.tap(find.byTooltip('更多操作'));
     await tester.pumpAndSettle();
     expect(tester.takeException(), isNull);

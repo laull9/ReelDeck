@@ -28,6 +28,7 @@ class AppSettings extends ChangeNotifier {
   bool rememberPosition = true;
   double defaultVolume = 1.0;
   bool recursiveScan = true;
+  bool autoRefreshFolders = true;
   bool showFilename = true;
   bool showFolder = true;
   bool showFileSize = true;
@@ -71,6 +72,7 @@ class AppSettings extends ChangeNotifier {
         1,
       );
       recursiveScan = data['recursiveScan'] as bool? ?? true;
+      autoRefreshFolders = data['autoRefreshFolders'] as bool? ?? true;
       showFilename = data['showFilename'] as bool? ?? true;
       showFolder = data['showFolder'] as bool? ?? true;
       showFileSize = data['showFileSize'] as bool? ?? true;
@@ -131,6 +133,7 @@ class AppSettings extends ChangeNotifier {
       'rememberPosition': rememberPosition,
       'defaultVolume': defaultVolume,
       'recursiveScan': recursiveScan,
+      'autoRefreshFolders': autoRefreshFolders,
       'showFilename': showFilename,
       'showFolder': showFolder,
       'showFileSize': showFileSize,
@@ -170,6 +173,7 @@ class AppSettings extends ChangeNotifier {
     bool? rememberPosition,
     double? defaultVolume,
     bool? recursiveScan,
+    bool? autoRefreshFolders,
     bool? showFilename,
     bool? showFolder,
     bool? showFileSize,
@@ -204,6 +208,9 @@ class AppSettings extends ChangeNotifier {
     if (rememberPosition != null) this.rememberPosition = rememberPosition;
     if (defaultVolume != null) this.defaultVolume = defaultVolume;
     if (recursiveScan != null) this.recursiveScan = recursiveScan;
+    if (autoRefreshFolders != null) {
+      this.autoRefreshFolders = autoRefreshFolders;
+    }
     if (showFilename != null) this.showFilename = showFilename;
     if (showFolder != null) this.showFolder = showFolder;
     if (showFileSize != null) this.showFileSize = showFileSize;
