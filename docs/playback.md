@@ -8,7 +8,9 @@
 
 硬解与显示分别控制。选择纯软解只设置 `hwdec=no`，GPU 继续显示视频；更改解码模式会按保存位置重新打开当前视频，并保留暂停状态。软解线程数限制为 2 至 4，避免多个播放器分别创建大量解码线程。保留容器默认探测参数，不压缩 probe 时间来换启动速度。缓存放在内存中，不重复写磁盘；外置盘优化启用时前向缓存 8 MiB，反向缓存为零，关闭后分别为 32 MiB 和 8 MiB。
 
-`media_kit_video` 固定为 2.0.1。Android 恢复位置等待 Surface 重建锁后执行，避免库内部恢复操作覆盖目标位置。这里引用包内实现；升级依赖时重新核对 `widListener`、锁和 Surface 初始化顺序。
+`media_kit` 固定为 1.2.6，`media_kit_video` 固定为 2.0.1。Android 恢复位置等待 Surface 重建锁后执行，避免库内部恢复操作覆盖目标位置。这里引用包内实现；升级依赖时重新核对 `widListener`、锁和 Surface 初始化顺序，以及 NativeProperties 使用的库路径与 FFI 接口。
+
+原生属性设置走异步 mpv 命令，属性查询在后台 isolate 执行。1.2.6 的 `NativePlayer.getProperty/setProperty` 内部包含同步 FFI，直接套 Future 超时仍会阻塞 UI isolate。查询超时后，释放播放器仍等待真实查询退出，保护原生句柄生命周期。播放中的 seek 允许查询耗时乘以播放倍速所对应的进度前移，暂停定位保持严格的位置检查。
 
 启动等待初始化时也挂载 Feed，让 Texture 接收首帧。每个播放器只挂一个 Video，IndexedStack 改变可见项。加载期间显示黑色遮罩，文件参数、Surface、seek 和 `vo-configured` 就绪后撤去遮罩。应用统一管理后台暂停与屏幕常亮。
 
@@ -17,6 +19,10 @@
 ## 损坏与高解码压力视频
 
 滑到仍在预加载的目标时，等待期间显示加载提示，不再停在离场后的黑底上。预加载已确认文件损坏（打开报错）时直接记录错误并跳过；预加载超时可能只是后台软解太慢，前台按选定解码模式再打开一次。
+
+开始交接先取消旧视频订阅并暂停旧播放器，再等待预加载、路径解析和定位。加载与重试控件固定在屏幕上，独立于离场动画。打开流程的异常处理覆盖路径解析和预加载等待，失败后清理 busy 状态。画面开始播放就解除进度事件屏蔽并通知界面，播放次数与会话写盘随后完成。备用播放器的解码设置与打开文件纳入同一串行操作，旧请求不能改写已经成为前台的播放器配置。
+
+单帧音视频解码错误和硬解回退日志交给停滞检测处理；文件、输入流、主播放流程的 error 以及 fatal 才立即触发恢复。完成事件和错误恢复按当前媒体身份去重，已经排队的旧错误也要重新核对身份。
 
 播放中进度连续 10 秒不前进，视为损坏帧或解码跟不上，记录到播放错误历史并按坏文件跳过；处于缓冲状态时放宽到 30 秒，避免误伤慢速外置盘。暂停、拖动进度与打开期间不计时。
 
@@ -58,5 +64,18 @@ flutter run -d macos --release -t build/playback-smoke/transition.dart
 python3 scripts/prepare_playback_smoke.py
 flutter run -d macos --release -t build/playback-smoke/stress.dart --dart-define=ROUNDS=180
 ```
+
+无需构建原生窗口的解码压力入口：
+
+```sh
+python3 scripts/prepare_decode_stress.py
+python3 scripts/run_native_decode_test.py
+```
+
+生成 8 秒运动测试画面的 4K60 H.264、4K60 10-bit HEVC，以及截断、损坏帧和无效容器。另生成 10 秒样本，只破坏第 3–3.5 秒的 15 个视频包，保留开头、容器索引及完整音轨。使用打包的 libmpv 双播放器软解、定位和恢复，检查 Dart 主 isolate 的定时心跳。macOS 启动器只在 build 目录复制并签名依赖库；其他平台可用 `REELDECK_LIBMPV` 指定库路径。
+
+4K 压力测试使用 null 视频输出；中途坏点测试使用 image 视频输出，检查正常起播、实际解码错误、坏点后第 6–7 秒继续输出视频帧，以及暂停和打开下一条。临时帧目录在测试结束时清理。Texture、Android Surface 和真实 GPU 交接需运行上面的窗口验收入口。
+
+2026-11-11：macOS 实际解码压力与损坏后恢复测试通过。中途坏点测试在播放位置 2.63 秒开始报告解码错误，坏点后第 6–7 秒输出帧数从 165 增至 195，暂停与打开下一条通过；持续停滞后的停止和跳过由 Feed 回归测试覆盖。窗口入口构建被本机 Xcode 缺少 CoreSimulator.framework 阻断。Windows、Linux、Android 的设备验收待执行。
 
 截图依赖窗口出帧；窗口被遮挡时 macOS 可能暂停绘制，入口会报“截图卡住”，这不代表播放队列卡住。

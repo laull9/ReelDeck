@@ -41,6 +41,40 @@ void main() {
     );
   });
 
+  for (final rate in [1.0, 2.0]) {
+    test('播放中的 seek 按 $rate 倍速接受查询期间的自然前进', () async {
+      final watch = Stopwatch()..start();
+      await waitForPlaybackReady(
+        position: const Duration(seconds: 20),
+        playbackRate: rate,
+        timeout: const Duration(seconds: 2),
+        getProperty: (property) async {
+          if (property == 'seeking') {
+            await Future<void>.delayed(const Duration(milliseconds: 450));
+            return 'no';
+          }
+          if (property == 'vo-configured') return 'yes';
+          return '${20 + watch.elapsedMicroseconds / 1e6 * rate}';
+        },
+      );
+    });
+  }
+
+  test('暂停定位仍拒绝离目标过远的旧画面', () async {
+    await expectLater(
+      waitForPlaybackReady(
+        position: const Duration(seconds: 20),
+        timeout: const Duration(milliseconds: 100),
+        getProperty: (name) async => switch (name) {
+          'seeking' => 'no',
+          'vo-configured' => 'yes',
+          _ => '22',
+        },
+      ),
+      throwsA(isA<TimeoutException>()),
+    );
+  });
+
   test('多个阶段共享预算，不为每个阶段重新计时', () async {
     final deadline = PlaybackDeadline(
       timeout: const Duration(milliseconds: 40),

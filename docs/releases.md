@@ -60,11 +60,13 @@ ORG_GRADLE_PROJECT_reeldeckNdkVersion=27.1.12297006 flutter build apk --release 
 
 版本标签必须采用 `v` 加 pubspec 版本，如 `v0.3.0`。手动发布必须给出已存在、且指向本次提交的标签；工作流不自动创建标签，也不使用写死的默认版本。
 
-四组构建任务全部成功后才汇总 10 个文件，生成 `SHA256SUMS` 并上传。Windows 检查整个目录中的 PE 架构和必需 DLL；Linux 检查 ELF 架构、动态链接、deb 安装和启动；macOS 拆分并检查全部 Mach-O 后重新本地签名；Android 检查 APK 的唯一 ABI 与 Flutter、Dart AOT、libmpv 库。
+四组构建任务全部成功后才汇总并上传 10 个文件。Windows 检查整个目录中的 PE 架构和必需 DLL；Linux 检查 ELF 架构、动态链接、deb 安装和启动；macOS 拆分并检查全部 Mach-O 后重新本地签名；Android 检查 APK 的唯一 ABI 与 Flutter、Dart AOT、libmpv 库。
 
 macOS 的本地签名用于保持包内签名一致，未包含 Developer ID 与公证。CI 中的 Linux 启动检查使用 Xvfb，只覆盖安装和启动，不代替硬件解码与外置卷测试。设备验收记录见 [TODO](../TODO.md)。
 
 ## 版本记录
+
+[v0.5.1](versions/v0.5.1.md) 修复中途坏帧误触发恢复、原生属性查询阻塞界面，以及切换等待时黑屏仍播放旧声音的问题。
 
 [v0.5.0](versions/v0.5.0.md) 修复坏视频黑屏卡死，增加目录自动刷新与窄屏换行排版，播放控制按钮居中。
 

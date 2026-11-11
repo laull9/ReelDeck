@@ -65,13 +65,18 @@ class PlayerPool {
     await _currentPlayer?.play();
   });
 
-  Future<void> preloadNext(String path, {Duration start = Duration.zero}) {
+  Future<void> preloadNext(
+    String path, {
+    Duration start = Duration.zero,
+    Future<void> Function(PlayerService)? prepare,
+  }) {
     // 捕获实例，排队期间发生交接则丢弃请求，不能覆盖正在播放的文件。
     final expected = _sparePlayer;
     return _run(() async {
       if (expected == null || !identical(expected, _sparePlayer)) return;
       if (hasPreloaded(path, start)) return;
       _preloadedStart = null;
+      if (prepare != null) await prepare(expected);
       await expected.open(path, start: start);
       _preloadedStart = start;
     });

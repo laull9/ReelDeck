@@ -52,7 +52,8 @@ extension FeedPlayback on FeedController {
             busy ||
             _opening ||
             _isScrubbing ||
-            _openedMediaId != id) {
+            _openedMediaId != id ||
+            currentMediaId != id) {
           return;
         }
         position = value;
@@ -81,7 +82,12 @@ extension FeedPlayback on FeedController {
       }),
       active.completedStream.listen((done) {
         // 打开期间也接受新视频自己的结束事件；旧视频的事件靠身份过滤。
-        if (!done || _openedMediaId != id || currentMediaId != id) return;
+        if (!done ||
+            _completed ||
+            _openedMediaId != id ||
+            currentMediaId != id) {
+          return;
+        }
         _completed = true;
         _run(() async {
           if (currentMediaId == id) await _advance();
@@ -89,11 +95,24 @@ extension FeedPlayback on FeedController {
       }),
     ]);
     _watchStall(active, id);
+    var recoveryQueued = false;
     if (active is MediaKitPlayerService) {
       _subscriptions.add(
         active.errors.listen((message) {
-          if (busy || _opening || _openedMediaId != id) return;
+          if (busy ||
+              _opening ||
+              recoveryQueued ||
+              _openedMediaId != id ||
+              currentMediaId != id) {
+            return;
+          }
+          recoveryQueued = true;
           _run(() async {
+            if (_openedMediaId != id ||
+                currentMediaId != id ||
+                !identical(player, active)) {
+              return;
+            }
             await active.pause();
             await _recover('无法播放 $currentFileName：$message');
           });
@@ -109,6 +128,8 @@ extension FeedPlayback on FeedController {
     _stallClock = Timer.periodic(stallTimeout ~/ 5, (_) {
       if (_disposed ||
           busy ||
+          _opening ||
+          _seekInProgress ||
           _isScrubbing ||
           _openedMediaId != id ||
           !identical(player, active) ||
@@ -131,6 +152,9 @@ extension FeedPlayback on FeedController {
   }
 
   Future<void> _recover(String message, {bool skip = true}) async {
+    await _unbind();
+    await player?.pause();
+    _playing = false;
     lastPlaybackError = message;
     errorLog.add(message, currentFileName);
     final media = currentMedia;
@@ -151,12 +175,28 @@ extension FeedPlayback on FeedController {
   }
 
   Future<void> _open() async {
-    final previousOpening = _opening;
     _opening = true;
+    error = null;
+    // 快速命中缓存时不闪加载圈；暂停、文件解析等慢阶段也必须有可见反馈。
+    final loading = Timer(const Duration(milliseconds: 150), () {
+      if (_opening && !_disposed) {
+        busy = true;
+        _notify();
+      }
+    });
     try {
+      // 在任何预加载、文件解析或 seek 等待之前停止离场视频。
+      await _unbind();
+      await player?.pause();
+      _playing = false;
       await _openMedia();
+    } catch (e) {
+      await _recover('视频打开失败：$e', skip: e is! TimeoutException);
     } finally {
-      _opening = previousOpening;
+      loading.cancel();
+      _opening = false;
+      busy = false;
+      _notify();
     }
   }
 
@@ -168,7 +208,7 @@ extension FeedPlayback on FeedController {
         busy = true;
         _notify();
       }
-      await _preloadTask;
+      await _preloadTask.timeout(const Duration(seconds: 12));
     }
     _preloadGeneration++;
     _isScrubbing = false;
@@ -194,7 +234,9 @@ extension FeedPlayback on FeedController {
       return;
     }
 
-    final resolved = await sourceManager?.resolveMediaPath(media);
+    final resolved = await sourceManager
+        ?.resolveMediaPath(media)
+        .timeout(const Duration(seconds: 12));
     if (resolved == null) {
       await _recover('视频或目录无法访问，请连接磁盘后重试，或重新授权目录。');
       return;
@@ -226,7 +268,6 @@ extension FeedPlayback on FeedController {
     await _unbind();
 
     try {
-      await player?.pause();
       if (player is MediaKitPlayerService) {
         await (player as MediaKitPlayerService).setDecoderMode(
           settings.decoderMode,
@@ -269,15 +310,16 @@ extension FeedPlayback on FeedController {
         _playing = settings.autoplay;
         _startImageClock();
       }
+      // 播放一旦启动就发布画面与进度；数据库收尾不能屏蔽播放器事件。
+      _opening = false;
+      busy = false;
+      _notify();
       // 当前视频一开始播放就准备下一条，不等待会话写盘。
       _preloadNeighbors();
       await store?.db.stateDao.incrementPlayCount(media.id);
       await _saveSession();
-    } catch (e) {
-      await _recover('视频打开失败：$e', skip: e is! TimeoutException);
     } finally {
       busy = false;
-      _notify();
     }
   }
 
@@ -302,22 +344,28 @@ extension FeedPlayback on FeedController {
       late final Future<void> task;
       _preloadTask = task = () async {
         try {
-          final nextPath = await sourceManager?.resolveMediaPath(next);
+          final nextPath = await sourceManager
+              ?.resolveMediaPath(next)
+              .timeout(const Duration(seconds: 12));
           if (nextPath != null &&
               !_disposed &&
               generation == _preloadGeneration) {
-            if (pool.nextPlayer is MediaKitPlayerService) {
-              final spare = pool.nextPlayer as MediaKitPlayerService;
-              await spare.setDecoderMode(
-                pool.softwarePreload ? 'no' : settings.decoderMode,
-              );
-              await spare.setDriveOptimization(
-                settings.externalDriveOptimization,
-              );
-            }
             final nextStart = await _resumePosition(next.id);
             if (!_disposed && generation == _preloadGeneration) {
-              await pool.preloadNext(nextPath, start: nextStart);
+              await pool.preloadNext(
+                nextPath,
+                start: nextStart,
+                prepare: (spare) async {
+                  if (spare is MediaKitPlayerService) {
+                    await spare.setDecoderMode(
+                      pool.softwarePreload ? 'no' : settings.decoderMode,
+                    );
+                    await spare.setDriveOptimization(
+                      settings.externalDriveOptimization,
+                    );
+                  }
+                },
+              );
             }
           }
         } catch (e) {

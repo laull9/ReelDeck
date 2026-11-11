@@ -127,9 +127,16 @@ void main() {
     final preload = pool.preloadNext('next.mp4');
     await slow.started.future;
     final swap = pool.swapToNext();
-    final stale = pool.preloadNext('stale.mp4');
+    var configuredStale = false;
+    final stale = pool.preloadNext(
+      'stale.mp4',
+      prepare: (_) async {
+        configuredStale = true;
+      },
+    );
     slow.gate.complete();
     await Future.wait([preload, swap, stale]);
+    expect(configuredStale, false);
     expect(pool.currentPlayer, same(slow));
     expect(pool.currentPlayer!.currentPath, 'next.mp4');
     expect(pool.nextPlayer!.currentPath, 'current.mp4');

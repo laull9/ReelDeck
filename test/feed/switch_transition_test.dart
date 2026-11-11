@@ -86,17 +86,20 @@ void main() {
             onHideFolder: noop,
             onReshuffle: noop,
             onToggleInfo: noop,
+            statusOverlay: const Center(child: Text('加载中')),
             child: const ColoredBox(color: Colors.red, child: Text('旧帧')),
           ),
         ),
       ),
     );
     final origin = tester.getTopLeft(find.text('旧帧'));
+    final statusOrigin = tester.getTopLeft(find.text('加载中'));
     key.currentState!.animateNext();
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 200));
     for (var frame = 0; frame < 12; frame++) {
       await tester.pump(const Duration(milliseconds: 16));
+      expect(tester.getTopLeft(find.text('加载中')), statusOrigin);
       expect(
         (tester.getTopLeft(find.text('旧帧')).dy - origin.dy).abs(),
         greaterThanOrEqualTo(600),

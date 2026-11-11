@@ -71,15 +71,23 @@ void main() {
     await folder.delete(recursive: true);
   });
 
-  test('播放中进度长时间不动判定为解码停滞，记录错误并跳过', () async {
+  test('正常播放后在坏点停滞，停止旧播放、记录错误并跳过', () async {
     final controller = await createFeed(FakePlayerService.new);
     controller.stallTimeout = const Duration(milliseconds: 100);
     await controller.next();
     final stalled = controller.currentMediaId;
+    final previous = controller.player!;
+    for (var second = 1; second <= 4; second++) {
+      await previous.seekTo(Duration(seconds: second));
+      await Future<void>.delayed(const Duration(milliseconds: 30));
+    }
+    expect(controller.lastPlaybackError, isNull);
     await waitFor(() => controller.lastPlaybackError != null);
     await controller.settled;
     expect(controller.lastPlaybackError, contains('解码停滞'));
     expect(controller.currentMediaId, isNot(stalled));
+    expect(previous.isPlaying, false);
+    expect(controller.isPlaying, true);
     expect(controller.busy, false);
   });
 

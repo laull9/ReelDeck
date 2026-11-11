@@ -129,6 +129,53 @@ class _FeedScreenState extends State<FeedScreen> {
               onFullscreen: feed.toggleFullscreen,
               onExitFullscreen: feed.exitFullscreen,
               onSpeed: feed.setSpeed,
+              statusOverlay: Stack(
+                fit: StackFit.expand,
+                children: [
+                  // 后台刷新目录时继续播放，不遮挡当前视频。
+                  if (feed.busy ||
+                      (sources.isScanning && feed.currentMediaId == null))
+                    const Center(child: CircularProgressIndicator()),
+                  if (error != null)
+                    Center(
+                      child: Card(
+                        child: ConstrainedBox(
+                          constraints: const BoxConstraints(maxWidth: 440),
+                          child: Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.error_outline),
+                                const SizedBox(height: 12),
+                                Text(error, textAlign: TextAlign.center),
+                                const SizedBox(height: 16),
+                                Wrap(
+                                  spacing: 12,
+                                  children: [
+                                    TextButton(
+                                      onPressed: feed.retry,
+                                      child: Text(l10n.retry),
+                                    ),
+                                    TextButton(
+                                      onPressed: feed.next,
+                                      child: Text(l10n.skip),
+                                    ),
+                                    TextButton(
+                                      onPressed: () =>
+                                          _navigate(context, AppRoutes.sources),
+                                      child: Text(l10n.manageFolders),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
               child: Stack(
                 fit: StackFit.expand,
                 children: [
@@ -202,48 +249,6 @@ class _FeedScreenState extends State<FeedScreen> {
                                 child: Text(l10n.restoreHidden),
                               ),
                           ],
-                        ),
-                      ),
-                    ),
-                  // 后台刷新目录时继续播放，不遮挡当前视频。
-                  if (feed.busy ||
-                      (sources.isScanning && feed.currentMediaId == null))
-                    const Center(child: CircularProgressIndicator()),
-                  if (error != null)
-                    Center(
-                      child: Card(
-                        child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 440),
-                          child: Padding(
-                            padding: const EdgeInsets.all(24),
-                            child: Column(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                const Icon(Icons.error_outline),
-                                const SizedBox(height: 12),
-                                Text(error, textAlign: TextAlign.center),
-                                const SizedBox(height: 16),
-                                Wrap(
-                                  spacing: 12,
-                                  children: [
-                                    TextButton(
-                                      onPressed: feed.retry,
-                                      child: Text(l10n.retry),
-                                    ),
-                                    TextButton(
-                                      onPressed: feed.next,
-                                      child: Text(l10n.skip),
-                                    ),
-                                    TextButton(
-                                      onPressed: () =>
-                                          _navigate(context, AppRoutes.sources),
-                                      child: Text(l10n.manageFolders),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
                         ),
                       ),
                     ),

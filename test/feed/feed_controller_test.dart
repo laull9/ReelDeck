@@ -294,8 +294,13 @@ void main() {
       ),
     );
     await slow.started.future;
+    final previous = feed.player!;
     final switching = feed.next();
-    await Future<void>.delayed(Duration.zero);
+    while (!feed.busy) {
+      await Future<void>.delayed(Duration.zero);
+    }
+    expect(previous.isPlaying, false, reason: '等待下一条时旧视频必须停止');
+    expect(feed.isPlaying, false);
     slow.gate.complete();
     await switching;
     expect(feed.player, same(slow));

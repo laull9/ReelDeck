@@ -18,6 +18,7 @@ class FeedGestureHandler extends StatefulWidget {
   final Object? displayedMediaId;
   final Widget? topOverlay;
   final Widget? bottomOverlay;
+  final Widget? statusOverlay;
   final FutureOr<void> Function() onNext;
   final FutureOr<void> Function() onPrevious;
   final VoidCallback onTogglePlayPause;
@@ -48,6 +49,7 @@ class FeedGestureHandler extends StatefulWidget {
     this.displayedMediaId,
     this.topOverlay,
     this.bottomOverlay,
+    this.statusOverlay,
     required this.onNext,
     required this.onPrevious,
     required this.onTogglePlayPause,
@@ -404,6 +406,8 @@ class FeedGestureHandlerState extends State<FeedGestureHandler>
                       ],
                     ),
                   ),
+
+                  if (widget.statusOverlay != null) widget.statusOverlay!,
 
                   // 2. 固定的顶部控制栏
                   if (widget.topOverlay != null)

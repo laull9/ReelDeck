@@ -11,6 +11,8 @@ import 'package:media_kit_video/src/video_controller/android_video_controller/an
 
 import 'player_service.dart';
 import 'playback_ready.dart';
+import 'native_properties.dart';
+import 'playback_errors.dart';
 
 class MediaKitPlayerService implements PlayerService {
   late final Player _player;
@@ -18,6 +20,7 @@ class MediaKitPlayerService implements PlayerService {
   late final Future<void> _initialization;
   String _automaticHwdec = 'auto';
   String? _currentPath;
+  NativeProperties? _properties;
   final presentationReady = ValueNotifier<bool>(false);
 
   VideoController get controller => _controller;
@@ -44,46 +47,41 @@ class MediaKitPlayerService implements PlayerService {
     _automaticHwdec = platform.configuration.hwdec ?? 'auto';
     if (_player.platform case final NativePlayer native) {
       // 精确定位必须与画面交接的位置检查一致，不能退回前一个关键帧。
-      await native.setProperty('hr-seek', 'yes');
-      await native.setProperty('hr-seek-framedrop', 'yes');
-      await native.setProperty(
+      final properties = _properties = NativeProperties(native);
+      await properties.set('hr-seek', 'yes');
+      await properties.set('hr-seek-framedrop', 'yes');
+      await properties.set(
         'vd-lavc-threads',
         Platform.numberOfProcessors.clamp(2, 4).toString(),
       );
       // 本地文件使用内存缓存，避免播放器重复写磁盘缓存。
-      await native.setProperty('cache-on-disk', 'no');
-      await _applyDecoderMode(native, decoderMode);
+      await properties.set('cache-on-disk', 'no');
+      await _applyDecoderMode(decoderMode);
     }
   }
 
-  Future<void> _applyDecoderMode(NativePlayer native, String mode) =>
-      native.setProperty(
-        'hwdec',
-        mode == 'no'
-            ? 'no'
-            : mode == 'auto-safe' && !Platform.isAndroid
-            ? 'auto-safe'
-            : _automaticHwdec,
-      );
+  Future<void> _applyDecoderMode(String mode) => _properties!.set(
+    'hwdec',
+    mode == 'no'
+        ? 'no'
+        : mode == 'auto-safe' && !Platform.isAndroid
+        ? 'auto-safe'
+        : _automaticHwdec,
+  );
 
   Future<void> setDecoderMode(String mode) async {
-    await _initialization;
-    if (_player.platform case final NativePlayer native) {
-      await _applyDecoderMode(native, mode);
-    }
+    await _initialization.timeout(const Duration(seconds: 12));
+    if (_properties != null) await _applyDecoderMode(mode);
   }
 
   Future<void> setDriveOptimization(bool enabled) async {
-    await _initialization;
-    if (_player.platform case final NativePlayer native) {
-      await native.setProperty(
+    await _initialization.timeout(const Duration(seconds: 12));
+    if (_properties case final properties?) {
+      await properties.set(
         'demuxer-max-bytes',
         enabled ? '8388608' : '33554432',
       );
-      await native.setProperty(
-        'demuxer-max-back-bytes',
-        enabled ? '0' : '8388608',
-      );
+      await properties.set('demuxer-max-back-bytes', enabled ? '0' : '8388608');
     }
   }
 
@@ -93,9 +91,11 @@ class MediaKitPlayerService implements PlayerService {
     await _player.stop().timeout(const Duration(seconds: 12));
   }
 
-  Future<void> setRate(double rate) => _player.setRate(rate);
+  Future<void> setRate(double rate) =>
+      _player.setRate(rate).timeout(const Duration(seconds: 12));
   bool get isBuffering => _player.state.buffering;
-  Stream<String> get errors => _player.stream.error;
+  Stream<String> get errors =>
+      _player.stream.log.where(isFatalPlaybackLog).map((log) => log.text);
 
   @override
   Future<void> open(String path, {Duration start = Duration.zero}) async {
@@ -145,12 +145,9 @@ class MediaKitPlayerService implements PlayerService {
         resume = Duration.zero;
         await deadline.wait(_player.seek(resume));
       }
-      if (_player.platform case final NativePlayer native) {
+      if (_properties case final properties?) {
         await deadline.wait(
-          waitForPlaybackReady(
-            getProperty: native.getProperty,
-            position: resume,
-          ),
+          waitForPlaybackReady(getProperty: properties.get, position: resume),
         );
       }
       _currentPath = path;
@@ -204,22 +201,25 @@ class MediaKitPlayerService implements PlayerService {
   Future<void> seekTo(Duration position) async {
     final deadline = PlaybackDeadline();
     await deadline.wait(_player.seek(position));
-    if (_player.platform case final NativePlayer native) {
+    if (_properties case final properties?) {
       await deadline.wait(
         waitForPlaybackReady(
-          getProperty: native.getProperty,
+          getProperty: properties.get,
           position: position,
+          playbackRate: isPlaying ? _player.state.rate : 0,
         ),
       );
     }
   }
 
   @override
-  Future<void> setVolume(double volume) =>
-      _player.setVolume(volume.clamp(0, 1) * 100);
+  Future<void> setVolume(double volume) => _player
+      .setVolume(volume.clamp(0, 1) * 100)
+      .timeout(const Duration(seconds: 12));
   @override
   Future<void> dispose() async {
     _currentPath = null;
+    await _properties?.close();
     await _player.dispose();
     presentationReady.dispose();
   }

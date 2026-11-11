@@ -14,13 +14,15 @@ class PlaybackDeadline {
   );
 }
 
-/// 文件参数就绪后，等待 seek 和视频输出完成，避免展示旧帧。
+/// 文件参数就绪后等待 seek 和视频输出；播放中的定位按倍速放宽自然前进距离。
 Future<void> waitForPlaybackReady({
   required Future<String> Function(String) getProperty,
   required Duration position,
+  double playbackRate = 0,
   Duration timeout = const Duration(seconds: 12),
 }) async {
   final deadline = PlaybackDeadline(timeout: timeout);
+  final watch = Stopwatch()..start();
   while (true) {
     final seeking = await deadline.wait(getProperty('seeking'));
     final output = await deadline.wait(getProperty('vo-configured'));
@@ -31,7 +33,11 @@ Future<void> waitForPlaybackReady({
         seeking == 'no' &&
         (position == Duration.zero ||
             (seconds != null &&
-                (seconds - position.inMilliseconds / 1000).abs() < 0.35))) {
+                seconds >= position.inMilliseconds / 1000 - 0.35 &&
+                seconds <=
+                    position.inMilliseconds / 1000 +
+                        0.35 +
+                        watch.elapsedMicroseconds / 1e6 * playbackRate))) {
       return;
     }
     await deadline.wait(Future<void>.delayed(const Duration(milliseconds: 50)));

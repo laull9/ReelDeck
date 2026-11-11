@@ -1,7 +1,7 @@
 name: reel_deck
 description: "Pick a folder. Shuffle. Swipe."
 publish_to: 'none'
-version: 0.5.0+7
+version: 0.5.1+8
 
 environment:
   sdk: ^3.13.4
@@ -13,7 +13,7 @@ dependencies:
     sdk: flutter
 
   # 播放器
-  media_kit: ^1.1.11
+  media_kit: 1.2.6
   media_kit_video: 2.0.1
   media_kit_libs_macos_video: ^1.1.4
   media_kit_libs_windows_video:
